@@ -218,7 +218,10 @@ class Encoder:
             self.encode(k)
             self.encode(v)
 
-    # TODO float + tag
+    def _encode_float(self, f: float):
+        # TODO - f32 vs f64 (smallest first)
+        self.stream.write(struct.pack(">Bd", FLOAT64, f))
+
     def _encode_bool(self, b: bool):
         self.stream.write(u8packer.pack(TRUE if b else FALSE))
 
@@ -327,6 +330,18 @@ def _decode_map_var(_: int, stream: io.BufferedIOBase) -> dict:
     return ctx
 
 
+@register(FLOAT32)
+def _decode_f32(_: int, stream: io.BufferedIOBase) -> float:
+    bites = _read_n_bytes(4, stream)
+    return struct.unpack(">f", bites)[0]
+
+
+@register(FLOAT64)
+def _decode_f64(_: int, stream: io.BufferedIOBase) -> float:
+    bites = _read_n_bytes(8, stream)
+    return struct.unpack(">d", bites)[0]
+
+
 @register(TRUE)
 def _decode_true(_: int, __: io.BufferedIOBase) -> bool:
     return True
@@ -359,6 +374,8 @@ if __name__ == "__main__":
     # for r in _DECODE_RANGES:
     #     print(f"{r.tipe} {hex(r.start)} - {hex(r.end)}")
 
+    import ubjson
+    import cbor2
     import json
     import json.scanner
 
@@ -384,9 +401,9 @@ if __name__ == "__main__":
 
     data = None
     for fname in [
-        "DeckList.json",
-        "nepse-listed-companies-2021.json",
-        "nobel-prize-winners-by-year.json",
+        "data/canada.json",
+        "data/citm_catalog.json",
+        "data/twitter.json",
     ]:
         print(f"file: {fname}")
 
@@ -394,6 +411,8 @@ if __name__ == "__main__":
             data = json.load(f)
 
         report("JSON", data, json.dumps, json.loads)
+        report("ubjson", data, ubjson.dumpb, ubjson.loadb)
         report("msgpack", data, msgpack.dumps, msgpack.loads)
+        report("cbor2", data, cbor2.dumps, cbor2.loads)
         report("ratpack", data, encode, decode)
         print()

@@ -13,6 +13,8 @@ python = "^3.11"
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.12"
 msgpack = "^1.1.2"
+cbor2 = "^6.1.0"
+py-ubjson = "^0.16.1"
 
 [build-system]
 requires = ["poetry-core"]
