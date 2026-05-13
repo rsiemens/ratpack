@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "ratpack"
+version = "0.1.0"
+description = "Packing away bits and bytes"
+authors = ["Ryan Siemens <ryanjsiemens@gmail.com>"]
+license = "Mozilla Public License 2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.15.12"
+msgpack = "^1.1.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
