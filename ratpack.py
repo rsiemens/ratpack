@@ -42,75 +42,57 @@ class RatPackException(Exception):
     pass
 
 
-_INT_SMALL_NUM_START = 0x00
-_INT_SMALL_NUM_END = 0x40
+UINT_SMALL_START = 0x00
+UINT_SMALL_END = 0x40
+UINT_VAR = 0x41
 
-_INT8 = 0x41
-_INT16 = 0x42
-_INT32 = 0x43
-_INT64 = 0x44
-_INT128 = 0x45
+NEG_INT_SMALL_START = 0x42
+NEG_INT_SMALL_END = 0x62
+NEG_INT_VAR = 0x63
 
-_NEG_INT_SMALL_NUM_START = 0x46
-_NEG_INT_SMALL_NUM_END = 0x66
-_NEG_INT8 = 0x67
-_NEG_INT16 = 0x68
-_NEG_INT32 = 0x69
-_NEG_INT64 = 0x6A
-_NEG_INT128 = 0x6B
+BIN_SMALL_START = 0x64
+BIN_SMALL_END = 0x74
+BIN_VAR = 0x75
 
-_STR_SMALL_NUM_START = 0x6C
-_STR_SMALL_NUM_END = 0x90
-_STR8 = 0x91
-_STR16 = 0x92
-_STR32 = 0x93
+STR_SMALL_NUM_START = 0x76
+STR_SMALL_NUM_END = 0x9A
+STR_VAR = 0x9B
 
-_ARR_SMALL_NUM_START = 0x94
-_ARR_SMALL_NUM_END = 0xB8
-_ARR8 = 0xB9
-_ARR16 = 0xBA
-_ARR32 = 0xBB
+ARR_SMALL_NUM_START = 0x9C
+ARR_SMALL_NUM_END = 0xC0
+ARR_VAR = 0xC1
 
-_MAP_SMALL_NUM_START = 0xBC
-_MAP_SMALL_NUM_END = 0xE0
-_MAP8 = 0xE1
-_MAP16 = 0xE2
-_MAP32 = 0xE3
+MAP_SMALL_NUM_START = 0xC2
+MAP_SMALL_NUM_END = 0xE6
+MAP_VAR = 0xE7
 
 # TODO
-# _FLOAT16?
-_FLOAT32 = 0xE4
-_FLOAT64 = 0xE5
-_TRUE = 0xE6
-_FALSE = 0xE7
-_NULL = 0xE8
-
-_BIN_SMALL_START = 0xE9
-_BIN_SMALL_END = 0xF1  # bump this from 8 to 16 to encode uuid
-_BIN8 = 0xF2
-_BIN16 = 0xF3
-_BIN32 = 0xF4
+FLOAT32 = 0xE8
+FLOAT64 = 0xE9
+TRUE = 0xEA
+FALSE = 0xEB
+NULL = 0xEC
 
 # TODO
-_TAG_SMALL_START = 0xF5
-_TAG_SMALL_END = 0xFD
-_TAG8 = 0xFE
-_TAG16 = 0xFF
+TAG_SMALL_START = 0xED
+TAG_SMALL_END = 0xFD
+TAG_VAR = 0xFE
 
-# 0Xff for stream terminator
-# ext: 0-9(10) +1 (8bit) +1 (16bit)
+# The MAGIC_NUMBER_START is only valid at the very begining of a file or ratpack stream.
+# It is not required, but if it is present, it must be immedidiately followed by the ascii encode
+# characters "rp" and a version byte 0x00-0xFF.
+MAGIC_NUMBER_START = 0xFF
+MAGIC_NUMER_TAG = b"rp\x00"
 
+MAX_ENC_INT = 2**128 - 1
 u8packer = struct.Struct(">B")
-
-
-MAX_INT = 2**128 - 1
 
 
 def leb128_enc(n: int, writer: io.BufferedIOBase):
     """Little endian base 128 https://en.wikipedia.org/wiki/LEB128"""
-    if n < 0 or n > MAX_INT:
+    if n < 0 or n > MAX_ENC_INT:
         raise RatPackException(
-            f"leb128_enc only encodes positive numbers up to {MAX_INT}. Was given {n}"
+            f"leb128_enc only encodes positive numbers up to {MAX_ENC_INT}. Was given {n}"
         )
     elif n == 0:
         writer.write(u8packer.pack(0))
@@ -140,9 +122,9 @@ def leb128_dec(reader: io.BufferedIOBase) -> int:
         shift += 7
         if byte & 0x80 == 0:
             break
-        if n > MAX_INT:
+        if n > MAX_ENC_INT:
             raise RatPackException(
-                f"Malformed leb128 encoded value. Exceeds max int ({MAX_INT})"
+                f"Malformed leb128 encoded value. Exceeds max int ({MAX_ENC_INT})"
             )
     return n
 
@@ -177,111 +159,76 @@ class Encoder:
         return self._encode_negative_int(i)
 
     def _encode_positive_int(self, i: int):
-        if i <= _INT_SMALL_NUM_END - _INT_SMALL_NUM_START:
-            self.stream.write(struct.pack(">B", _INT_SMALL_NUM_START + i))
-        elif i <= 0xFF:
-            self.stream.write(struct.pack(">BB", _INT8, i))
-        elif i <= 0xFFFF:
-            self.stream.write(struct.pack(">BH", _INT16, i))
-        elif i <= 0xFFFFFFFF:
-            self.stream.write(struct.pack(">BI", _INT32, i))
-        elif i <= 0xFFFFFFFFFFFFFFFF:
-            self.stream.write(struct.pack(">BQ", _INT64, i))
-        elif i <= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:
-            self.stream.write(
-                struct.pack(">BQQ", _INT128, i >> 64, i & 0xFFFFFFFFFFFFFFFF)
-            )
+        if i <= UINT_SMALL_END - UINT_SMALL_START:
+            self.stream.write(u8packer.pack(UINT_SMALL_START + i))
+        else:
+            self.stream.write(u8packer.pack(UINT_VAR))
+            leb128_enc(i, self.stream)
 
     def _encode_negative_int(self, i: int):
         i = abs(i)
-        if i <= _NEG_INT_SMALL_NUM_END - _NEG_INT_SMALL_NUM_START:
-            self.stream.write(struct.pack(">B", _NEG_INT_SMALL_NUM_START + i))
-        elif i <= 0xFF:
-            self.stream.write(struct.pack(">BB", _NEG_INT8, i))
-        elif i <= 0xFFFF:
-            self.stream.write(struct.pack(">BH", _NEG_INT16, i))
-        elif i <= 0xFFFFFFFF:
-            self.stream.write(struct.pack(">BI", _NEG_INT32, i))
-        elif i <= 0xFFFFFFFFFFFFFFFF:
-            self.stream.write(struct.pack(">BQ", _NEG_INT64, i))
-        elif i <= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:
-            self.stream.write(
-                struct.pack(">BQQ", _NEG_INT128, i >> 64, i & 0xFFFFFFFFFFFFFFFF)
-            )
+        if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START:
+            self.stream.write(u8packer.pack(NEG_INT_SMALL_START + i))
+        else:
+            self.stream.write(u8packer.pack(NEG_INT_VAR))
+            leb128_enc(i, self.stream)
+
+    def _encode_bytes(self, b: bytes):
+        size = len(b)
+        if size <= BIN_SMALL_END - BIN_SMALL_START:
+            self.stream.write(u8packer.pack(BIN_SMALL_START + size))
+        else:
+            self.stream.write(u8packer.pack(BIN_VAR))
+            leb128_enc(size, self.stream)
+
+        self.stream.write(b)
 
     def _encode_str(self, s: str):
         val = s.encode("utf8")
         size = len(val)
 
-        if size <= _STR_SMALL_NUM_END - _STR_SMALL_NUM_START:
-            self.stream.write(struct.pack(">B", _STR_SMALL_NUM_START + size))
-        elif size <= 0xFF:
-            self.stream.write(struct.pack(">BB", _STR8, size))
-        elif size <= 0xFFFF:
-            self.stream.write(struct.pack(">BH", _STR16, size))
-        elif size <= 0xFFFFFFFF:
-            self.stream.write(struct.pack(">BI", _STR32, size))
+        if size <= STR_SMALL_NUM_END - STR_SMALL_NUM_START:
+            self.stream.write(u8packer.pack(STR_SMALL_NUM_START + size))
         else:
-            raise Exception("str to large")
+            self.stream.write(u8packer.pack(STR_VAR))
+            leb128_enc(size, self.stream)
 
         self.stream.write(val)
 
     def _encode_list(self, l: list):
         size = len(l)
-        if size <= _ARR_SMALL_NUM_END - _ARR_SMALL_NUM_START:
-            self.stream.write(struct.pack(">B", _ARR_SMALL_NUM_START + size))
-        elif size <= 0xFF:
-            self.stream.write(struct.pack(">BB", _ARR8, size))
-        elif size <= 0xFFFF:
-            self.stream.write(struct.pack(">BH", _ARR16, size))
-        elif size <= 0xFFFFFFFF:
-            self.stream.write(struct.pack(">BI", _ARR32, size))
+        if size <= ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
+            self.stream.write(u8packer.pack(ARR_SMALL_NUM_START + size))
+        else:
+            self.stream.write(u8packer.pack(ARR_VAR))
+            leb128_enc(size, self.stream)
 
         for i in l:
             self.encode(i)
 
     def _encode_dict(self, d: dict):
         size = len(d)
-        if size <= _MAP_SMALL_NUM_END - _MAP_SMALL_NUM_START:
-            self.stream.write(struct.pack(">B", _MAP_SMALL_NUM_START + size))
-        elif size <= 0xFF:
-            self.stream.write(struct.pack(">BB", _MAP8, size))
-        elif size <= 0xFFFF:
-            self.stream.write(struct.pack(">BH", _MAP16, size))
-        elif size <= 0xFFFFFFFF:
-            self.stream.write(struct.pack(">BI", _MAP32, size))
+        if size <= MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
+            self.stream.write(u8packer.pack(MAP_SMALL_NUM_START + size))
+        else:
+            self.stream.write(u8packer.pack(MAP_VAR))
+            leb128_enc(size, self.stream)
 
         for k, v in d.items():
             self.encode(k)
             self.encode(v)
 
+    # TODO float + tag
     def _encode_bool(self, b: bool):
-        if b:
-            self.stream.write(struct.pack(">B", _TRUE))
-        else:
-            self.stream.write(struct.pack(">B", _FALSE))
+        self.stream.write(u8packer.pack(TRUE if b else FALSE))
 
     def _encode_NoneType(self, _: None):
-        self.stream.write(struct.pack(">B", _NULL))
-
-    def _encode_bytes(self, b: bytes):
-        size = len(b)
-        if size <= _BIN_SMALL_END - _BIN_SMALL_START:
-            self.stream.write(struct.pack(">B", _BIN_SMALL_START + size))
-        elif size <= 0xFF:
-            self.stream.write(struct.pack(">BB", _BIN8, size))
-        elif size <= 0xFFFF:
-            self.stream.write(struct.pack(">BH", _BIN16, size))
-        elif size <= 0xFFFFFFFF:
-            self.stream.write(struct.pack(">BI", _BIN32, size))
-        else:
-            raise Exception("bytes to large")
-
-        self.stream.write(b)
+        self.stream.write(u8packer.pack(NULL))
 
 
-def _not_implemented(marker: int, _: io.BufferedIOBase):
-    raise NotImplementedError(f"{hex(marker)} not implemented")
+def _not_implemented(marker: int, stream: io.BufferedIOBase):
+    pos = stream.tell()
+    raise NotImplementedError(f"{hex(marker)} not implemented (at position {pos})")
 
 
 _DECODE_TABLE = [_not_implemented] * 0xFF
@@ -300,68 +247,24 @@ def register(start: int, stop: int | None = None):
     return wrapper
 
 
-@register(_INT_SMALL_NUM_START, _INT_SMALL_NUM_END)
+@register(UINT_SMALL_START, UINT_SMALL_END)
 def _decode_small_int(marker: int, _: io.BufferedIOBase) -> int:
     return marker
 
 
-@register(_INT8)
-def _decode_int8(_: int, stream: io.BufferedIOBase) -> int:
-    return struct.unpack(">B", stream.read(1))[0]
+@register(UINT_VAR)
+def _decode_int_var(_: int, stream: io.BufferedIOBase) -> int:
+    return leb128_dec(stream)
 
 
-@register(_INT16)
-def _decode_int16(_: int, stream: io.BufferedIOBase) -> int:
-    return struct.unpack(">H", stream.read(2))[0]
-
-
-@register(_INT32)
-def _decode_int32(_: int, stream: io.BufferedIOBase) -> int:
-    return struct.unpack(">I", stream.read(4))[0]
-
-
-@register(_INT64)
-def _decode_int64(_: int, stream: io.BufferedIOBase) -> int:
-    return struct.unpack(">Q", stream.read(8))[0]
-
-
-@register(_INT128)
-def _decode_int128(_: int, stream: io.BufferedIOBase) -> int:
-    vals = struct.unpack(">QQ", stream.read(16))
-    num = vals[0] << 64
-    return num | vals[1]
-
-
-@register(_NEG_INT_SMALL_NUM_START, _NEG_INT_SMALL_NUM_END)
+@register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
 def _decode_small_neg_int(marker: int, _: io.BufferedIOBase) -> int:
-    return -(marker - _NEG_INT_SMALL_NUM_START)
+    return -(marker - NEG_INT_SMALL_START)
 
 
-@register(_NEG_INT8)
-def _decode_neg_int8(_: int, stream: io.BufferedIOBase) -> int:
-    return -(struct.unpack(">B", stream.read(1))[0])
-
-
-@register(_NEG_INT16)
-def _decode_neg_int16(_: int, stream: io.BufferedIOBase) -> int:
-    return -struct.unpack(">H", stream.read(2))[0]
-
-
-@register(_NEG_INT32)
-def _decode_neg_int32(_: int, stream: io.BufferedIOBase) -> int:
-    return -struct.unpack(">I", stream.read(4))[0]
-
-
-@register(_NEG_INT64)
-def _decode_neg_int64(_: int, stream: io.BufferedIOBase) -> int:
-    return -struct.unpack(">Q", stream.read(8))[0]
-
-
-@register(_NEG_INT128)
-def _decode_neg_int128(_: int, stream: io.BufferedIOBase) -> int:
-    vals = struct.unpack(">QQ", stream.read(16))
-    num = vals[0] << 64
-    return -(num | vals[1])
+@register(NEG_INT_VAR)
+def _decode_neg_int_var(_: int, stream: io.BufferedIOBase) -> int:
+    return -(leb128_dec(stream))
 
 
 def _read_n_bytes(size: int, stream: io.BufferedIOBase) -> bytes:
@@ -373,69 +276,39 @@ def _read_n_bytes(size: int, stream: io.BufferedIOBase) -> bytes:
     return val
 
 
-@register(_STR_SMALL_NUM_START, _STR_SMALL_NUM_END)
+@register(STR_SMALL_NUM_START, STR_SMALL_NUM_END)
 def _decode_small_str(marker: int, stream: io.BufferedIOBase) -> str:
-    size = marker - _STR_SMALL_NUM_START
+    size = marker - STR_SMALL_NUM_START
     return _read_n_bytes(size, stream).decode("utf8")
 
 
-@register(_STR8)
-def _decode_str8(_: int, stream: io.BufferedIOBase) -> str:
-    size = stream.read(1)[0]
+@register(STR_VAR)
+def _decode_str_var(_: int, stream: io.BufferedIOBase) -> str:
+    size = leb128_dec(stream)
     return _read_n_bytes(size, stream).decode("utf8")
 
 
-@register(_STR16)
-def _decode_str16(_: int, stream: io.BufferedIOBase) -> str:
-    size = struct.unpack(">H", stream.read(2))[0]
-    return _read_n_bytes(size, stream).decode("utf8")
-
-
-@register(_STR32)
-def _decode_str32(_: int, stream: io.BufferedIOBase) -> str:
-    size = struct.unpack(">I", stream.read(4))[0]
-    return _read_n_bytes(size, stream).decode("utf8")
-
-
-@register(_ARR_SMALL_NUM_START, _ARR_SMALL_NUM_END)
+@register(ARR_SMALL_NUM_START, ARR_SMALL_NUM_END)
 def _decode_small_arr(marker: int, stream: io.BufferedIOBase) -> list:
-    size = marker - _ARR_SMALL_NUM_START
+    size = marker - ARR_SMALL_NUM_START
     ctx = [None] * size
     for i in range(size):
         ctx[i] = _visit(stream)
     return ctx
 
 
-@register(_ARR8)
-def _decode_arr8(_: int, stream: io.BufferedIOBase) -> list:
-    size = stream.read(1)[0]
+@register(ARR_VAR)
+def _decode_arr_var(_: int, stream: io.BufferedIOBase) -> list:
+    size = leb128_dec(stream)
     ctx = [None] * size
     for i in range(size):
         ctx[i] = _visit(stream)
     return ctx
 
 
-@register(_ARR16)
-def _decode_arr16(_: int, stream: io.BufferedIOBase) -> list:
-    size = struct.unpack(">H", stream.read(2))[0]
-    ctx = [None] * size
-    for i in range(size):
-        ctx[i] = _visit(stream)
-    return ctx
-
-
-@register(_ARR32)
-def _decode_arr32(_: int, stream: io.BufferedIOBase) -> list:
-    size = struct.unpack(">I", stream.read(4))[0]
-    ctx = [None] * size
-    for i in range(size):
-        ctx[i] = _visit(stream)
-    return ctx
-
-
-@register(_MAP_SMALL_NUM_START, _MAP_SMALL_NUM_END)
+@register(MAP_SMALL_NUM_START, MAP_SMALL_NUM_END)
 def _decode_small_map(marker: int, stream: io.BufferedIOBase) -> dict:
-    size = marker - _MAP_SMALL_NUM_START
+    size = marker - MAP_SMALL_NUM_START
     ctx = {}
     for _ in range(size):
         k = _visit(stream)
@@ -444,9 +317,9 @@ def _decode_small_map(marker: int, stream: io.BufferedIOBase) -> dict:
     return ctx
 
 
-@register(_MAP8)
-def _decode_map8(_: int, stream: io.BufferedIOBase) -> dict:
-    size = stream.read(1)[0]
+@register(MAP_VAR)
+def _decode_map_var(_: int, stream: io.BufferedIOBase) -> dict:
+    size = leb128_dec(stream)
     ctx = {}
     for _ in range(size):
         k = _visit(stream)
@@ -454,37 +327,17 @@ def _decode_map8(_: int, stream: io.BufferedIOBase) -> dict:
     return ctx
 
 
-@register(_MAP16)
-def _decode_map16(_: int, stream: io.BufferedIOBase) -> dict:
-    size = struct.unpack(">H", stream.read(2))[0]
-    ctx = {}
-    for _ in range(size):
-        k = _visit(stream)
-        ctx[k] = _visit(stream)
-    return ctx
-
-
-@register(_MAP32)
-def _decode_map32(_: int, stream: io.BufferedIOBase) -> dict:
-    size = struct.unpack(">I", stream.read(4))[0]
-    ctx = {}
-    for _ in range(size):
-        k = _visit(stream)
-        ctx[k] = _visit(stream)
-    return ctx
-
-
-@register(_TRUE)
+@register(TRUE)
 def _decode_true(_: int, __: io.BufferedIOBase) -> bool:
     return True
 
 
-@register(_FALSE)
+@register(FALSE)
 def _decode_false(_: int, __: io.BufferedIOBase) -> bool:
     return False
 
 
-@register(_NULL)
+@register(NULL)
 def _decode_null(_: int, __: io.BufferedIOBase) -> None:
     return None
 
@@ -515,10 +368,6 @@ if __name__ == "__main__":
     json._default_decoder = _py_decoder
     import time
     import msgpack
-
-    # test_val = ["hello", 0, 10, 259, -10, -9449554]
-    # print(json.dumps(test_val))
-    # print()
 
     def report(title, data, encoder, decoder):
         print(f"=={title}")

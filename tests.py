@@ -43,15 +43,15 @@ class TestLEB128Case(unittest.TestCase):
 
 class TypesTestCase(unittest.TestCase):
     def test_uint(self):
-        for i in range(rp._INT_SMALL_NUM_END - rp._INT_SMALL_NUM_END + 1):
+        for i in range(rp.UINT_SMALL_END - rp.UINT_SMALL_START + 1):
             with self.subTest(f"uint({i})"):
                 msg = rp.encode(i)
                 self.assertEqual(len(msg), 1)
                 self.assertEqual(msg, bytes([i]))
 
     def test_negint(self):
-        for i in range(1, rp._NEG_INT_SMALL_NUM_END - rp._NEG_INT_SMALL_NUM_START + 1):
+        for i in range(1, rp.NEG_INT_SMALL_END - rp.NEG_INT_SMALL_START + 1):
             with self.subTest(f"negative({i})"):
                 msg = rp.encode(-i)
                 self.assertEqual(len(msg), 1)
-                self.assertEqual(msg, bytes([rp._NEG_INT_SMALL_NUM_START + i]))
+                self.assertEqual(msg, bytes([rp.NEG_INT_SMALL_START + i]))
