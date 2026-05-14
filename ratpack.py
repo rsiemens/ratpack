@@ -66,14 +66,12 @@ MAP_SMALL_NUM_START = 0xC2
 MAP_SMALL_NUM_END = 0xE6
 MAP_VAR = 0xE7
 
-# TODO
 FLOAT32 = 0xE8
 FLOAT64 = 0xE9
 TRUE = 0xEA
 FALSE = 0xEB
 NULL = 0xEC
 
-# TODO
 TAG_SMALL_START = 0xED
 TAG_SMALL_END = 0xFD
 TAG_VAR = 0xFE
@@ -283,8 +281,12 @@ class Encoder:
             self._encode(v)
 
     def _encode_float(self, f: float):
-        # TODO - f32 vs f64 (smallest first)
-        self.stream.write(struct.pack(">Bd", FLOAT64, f))
+        # this slows us down a good bit...
+        can_be_f32 = f32packer.unpack(f32packer.pack(f))[0] == f
+        if can_be_f32:
+            self.stream.write(struct.pack(">Bf", FLOAT32, f))
+        else:
+            self.stream.write(struct.pack(">Bd", FLOAT64, f))
 
     def _encode_bool(self, b: bool):
         self.stream.write(u8packer.pack(TRUE if b else FALSE))
@@ -457,10 +459,6 @@ class Decoder:
 
 
 if __name__ == "__main__":
-    # for r in _DECODE_RANGES:
-    #     print(f"{r.tipe} {hex(r.start)} - {hex(r.end)}")
-
-    import ubjson
     from ubjson.encoder import dumpb as ubjson_dumpb
     from ubjson.decoder import loadb as ubjson_loadb
     import cbor2
