@@ -15,6 +15,7 @@ ruff = "^0.15.12"
 msgpack = "^1.1.2"
 cbor2 = "^6.1.0"
 py-ubjson = "^0.16.1"
+mypy = "^2.1.0"
 
 [build-system]
 requires = ["poetry-core"]

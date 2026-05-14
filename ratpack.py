@@ -1,21 +1,40 @@
 """
-Ratpack is fast and efficent schemaless binary serialization format.
+Ratpack is a relatively simple and efficent schemaless binary serialization format.
 
-It takes inspiration from both msgpack and cbor.
+It takes inspiration from msgpack, cbor, and protobuf.
 
 Ratpack splits it's types across a one byte number range (0-255) and assigns types to different
-ranges. For example small strings cover 0x6C - 0x90 while 32 bit length arrays are assigned 0xBB.
+ranges. For example small strings cover 0x76 - 0x9A while variable length strings are assigned 0x9B.
 
-Features:
-    - Natural ordering within types (small strings < str8 < str16 < str32)
-    - Intentional small values. For example small strings can encode a length up to 36 which covers common string representations like uuids and iso8601 timestamps.
-    - Simple extension type via tags
-    - Unknown length strings, binary blobs, arrays, and dicts
+The full range is as follows:
+    - unsigned small int 0x00-0x40
+    - unsigned var int 0x41
+    - negative small int 0x42-0x62
+    - negative var int 0x63
+    - small byte str 0x64-0x74
+    - var len byte str 0x75
+    - small utf8 enc str 0x76-0x9A
+    - var len utf8 enc str 0x9B
+    - small array 0x9C-0xC0
+    - var len array 0xC1-0xC2
+    - small map 0xC2-0xE6
+    - var len map 0xE7
+    - IEEE 754 float32 0xE8
+    - IEEE 754 float64 0xE9
+    - true 0xEA
+    - false 0xEB
+    - null 0xEC
+    - small tag 0xED-0xFD
+    - var tag 0xFE
 
-    - ?deterministic ordering and content adressable id
-        - follows https://datatracker.ietf.org/doc/html/rfc8949#section-4.2
-        - floats?
-        - sort by major_type < small_type < type_varlen/int < len_n < len_n+1 < lexigraphical
+Variable size ints and length are implemented using unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128)
+encoding which allows storing arbitrary length ints.
+
+Some notable features (not yet all implemented):
+    - Easily comparable. All types are simply compared lexigraphical. This means a unsigned small int < unsigned var int < ... < var len map < ... < var tag
+    - Intentional small values. For example small strings can encode a length up to 36 which covers common string representations like uuids and ISO 8601 timestamps.
+    - Simple extension type via tags.
+    - [TODO] Deterministic ordering allowing for content adressable storage.
 """
 
 import io
@@ -90,11 +109,11 @@ f32packer = struct.Struct(">f")
 f64packer = struct.Struct(">d")
 
 
-def leb128_enc(n: int, writer: io.BufferedIOBase):
+def leb128_enc(n: int, writer: io.BufferedIOBase, max_size: int = MAX_ENC_INT) -> None:
     """Little endian base 128 https://en.wikipedia.org/wiki/LEB128"""
-    if n < 0 or n > MAX_ENC_INT:
+    if n < 0 or n > max_size:
         raise RatPackException(
-            f"leb128_enc only encodes positive numbers up to {MAX_ENC_INT}. Was given {n}"
+            f"leb128_enc only encodes positive numbers up to {max_size}. Was given {n}"
         )
     elif n == 0:
         writer.write(u8packer.pack(0))
@@ -157,17 +176,17 @@ class Tag(Generic[T]):
         return f"<Tag({self.id} {self.obj_type})>"
 
 
-def encode(obj: RatType, tags: set[Tag] | None = None) -> bytes:
-    encoder = Encoder(io.BytesIO(), tags)
+def encode(obj: Any, tags: set[Tag] | None = None) -> bytes:
+    stream = io.BytesIO()
+    encoder = Encoder(stream, tags)
     encoder.encode(obj)
-    return encoder.stream.getvalue()
+    return stream.getvalue()
 
 
-def decode(bites: bytes, tags: set[Tag] | None = None) -> RatType:
+def decode(bites: bytes, tags: set[Tag] | None = None) -> Any:
     return Decoder(io.BytesIO(bites), tags).decode()
 
 
-# TODO: inherhitance should work. ex `class MyInt(int): ...`
 class Encoder:
     def __init__(
         self,
@@ -189,17 +208,17 @@ class Encoder:
                 elif tag.obj_type in self.tags:
                     existing_tag = self.tags[tag.obj_type]
                     raise RatPackException(
-                        f"Tag id {tag.id} is already in use by another tag {existing_tag}"
+                        f"Tag for {tag.obj_type} is already in use by {existing_tag}"
                     )
                 tag_ids.add(tag.id)
                 self.tags[tag.obj_type] = tag
 
-    def encode(self, obj: RatType):
+    def encode(self, obj: Any):
         if self.include_header:
             self._encode_header()
         self._encode(obj)
 
-    def _encode(self, obj: RatType):
+    def _encode(self, obj: Any):
         tipe = type(obj).__name__
         dispatch = getattr(self, f"_encode_{tipe}", None)
 
@@ -336,13 +355,11 @@ class Decoder:
         self.tags: dict[int, Tag] = {}
 
         if tags is not None:
-            tag_ids = TAG_RESERVED.copy()
             for tag in tags:
-                if tag.id in tag_ids:
+                if tag.id in TAG_RESERVED or tag.id in self.tags:
                     raise RatPackException(
                         f"Tag id {tag.id} is already in use or reserved"
                     )
-                tag_ids.add(tag.id)
                 self.tags[tag.id] = tag
 
     def decode(self):
@@ -456,49 +473,3 @@ class Decoder:
         tag = self.tags[tag_id]
         obj = self._visit()
         return tag.decode(obj)
-
-
-if __name__ == "__main__":
-    from ubjson.encoder import dumpb as ubjson_dumpb
-    from ubjson.decoder import loadb as ubjson_loadb
-    import cbor2
-    import json
-    import json.scanner
-
-    # Patch the default decoder to use pure Python scanner
-    _py_decoder = json.JSONDecoder()
-    _py_decoder.scan_once = json.scanner.py_make_scanner(_py_decoder)
-    json._default_decoder = _py_decoder
-    import time
-    import msgpack
-
-    def report(title, data, encoder, decoder):
-        print(f"=={title}")
-        start = time.perf_counter()
-        raw = encoder(data)
-        end = time.perf_counter()
-        print(f"\tEncoding size: {len(raw)}")
-        print(f"\tEncoding time: {end - start:.6f} seconds")
-
-        start = time.perf_counter()
-        data = decoder(raw)
-        end = time.perf_counter()
-        print(f"\tDecoding time: {end - start:.6f} seconds")
-
-    data = None
-    for fname in [
-        "data/canada.json",
-        "data/citm_catalog.json",
-        "data/twitter.json",
-    ]:
-        print(f"file: {fname}")
-
-        with open(fname) as f:
-            data = json.load(f)
-
-        report("JSON", data, json.dumps, json.loads)
-        report("ubjson", data, ubjson_dumpb, ubjson_loadb)
-        report("msgpack", data, msgpack.dumps, msgpack.loads)
-        report("cbor2", data, cbor2.dumps, cbor2.loads)
-        report("ratpack", data, encode, decode)
-        print()

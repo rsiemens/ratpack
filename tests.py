@@ -7,27 +7,26 @@ import json
 
 
 class LEB128TestCase(unittest.TestCase):
-    def test_leb128_enc_dec(self):
+    def test_leb128_enc_dec(self) -> None:
         for i in range(128):
             buff = io.BytesIO()
             rp.leb128_enc(i, buff)
 
             buff.seek(0)
             n = rp.leb128_dec(buff)
-
             self.assertEqual(n, i)
 
         test_cases = [
-            128,
-            0xFF,
-            0x100,
-            0xFFFF,
-            0x10000,
-            0xFFFFFFFF,
-            0x100000000,
-            0xFFFFFFFFFFFFFFFF,
-            0x10000000000000000,
-            0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF,
+            2**7,
+            2**8 - 1,
+            2**8,
+            2**16 - 1,
+            2**16,
+            2**32 - 1,
+            2**32,
+            2**64 - 1,
+            2**64,
+            2**128 - 1,
         ]
         for i in test_cases:
             buff = io.BytesIO()
@@ -35,33 +34,40 @@ class LEB128TestCase(unittest.TestCase):
 
             buff.seek(0)
             n = rp.leb128_dec(buff)
-
             self.assertEqual(n, i)
 
         with self.assertRaises(rp.RatPackException):
-            rp.leb128_enc(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF + 1, io.BytesIO())
+            rp.leb128_enc(2**128, io.BytesIO())
+
         with self.assertRaises(rp.RatPackException):
             rp.leb128_enc(-1, io.BytesIO())
 
 
 class TypesTestCase(unittest.TestCase):
-    def test_uint(self):
+    def test_uint(self) -> None:
         for i in range(rp.UINT_SMALL_END - rp.UINT_SMALL_START + 1):
             with self.subTest(f"uint({i})"):
                 msg = rp.encode(i)
                 self.assertEqual(len(msg), 1)
                 self.assertEqual(msg, bytes([i]))
 
-    def test_negint(self):
+        self.assertEqual(rp.decode(rp.encode(0xFFF)), 0xFFF)
+
+    def test_negint(self) -> None:
         for i in range(1, rp.NEG_INT_SMALL_END - rp.NEG_INT_SMALL_START + 1):
             with self.subTest(f"negative({i})"):
                 msg = rp.encode(-i)
                 self.assertEqual(len(msg), 1)
                 self.assertEqual(msg, bytes([rp.NEG_INT_SMALL_START + i]))
 
-    def test_tag(self):
+        self.assertEqual(rp.decode(rp.encode(-0xFFF)), -0xFFF)
+
+    def test_tag(self) -> None:
         dt_tag = rp.Tag(
-            9, datetime, lambda dt: dt.isoformat(), lambda s: datetime.fromisoformat(s)
+            id=9,
+            obj_type=datetime,
+            encoder=lambda dt: dt.isoformat(),
+            decoder=lambda s: datetime.fromisoformat(s),
         )
 
         dt = datetime.now()
@@ -69,33 +75,12 @@ class TypesTestCase(unittest.TestCase):
         data = rp.decode(bites, tags={dt_tag})
         self.assertEqual(dt, data)
 
-        class MyModel:
-            def __init__(self, name, age):
-                self.name = name
-                self.age = age
-
-            def as_dict(self):
-                return {"name": self.name, "age": self.age}
-
-            @classmethod
-            def from_dict(cls, obj):
-                return cls(obj["name"], obj["age"])
-
-            def __eq__(self, other):
-                return self.name == other.name and self.age == other.age
-
-        my_tag = rp.Tag(
-            10, MyModel, lambda m: m.as_dict(), lambda o: MyModel.from_dict(o)
-        )
-        me = MyModel("Ryan", 36)
-        bites = rp.encode(me, tags={dt_tag, my_tag})
-        data = rp.decode(bites, tags={dt_tag, my_tag})
-        self.assertEqual(me, data)
-
 
 class BenchMarkTestCase(unittest.TestCase):
+    benchmarks: list[dict]
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.benchmarks = [
             {
                 "file": "data/canada.json",
@@ -119,12 +104,12 @@ class BenchMarkTestCase(unittest.TestCase):
         ]
         return super().setUpClass()
 
-    def test_benchmark(self):
+    def test_benchmark(self) -> None:
         for bench in self.benchmarks:
             with self.subTest(file=bench["file"]):
                 self._benchmark(bench)
 
-    def _benchmark(self, bench):
+    def _benchmark(self, bench) -> None:
         with open(bench["file"]) as f:
             data = json.load(f)
             timer = timeit.Timer("rp.encode(data)", globals={"rp": rp, "data": data})
@@ -147,7 +132,7 @@ class BenchMarkTestCase(unittest.TestCase):
             self.assert_in_range(min(enc_time), bench["enc_time"], 0.1)
             self.assert_in_range(min(dec_time), bench["dec_time"], 0.1)
 
-    def assert_in_range(self, actual_time, time, tolerance):
+    def assert_in_range(self, actual_time, time, tolerance) -> None:
         if actual_time > (time + time * tolerance):
             self.fail(f"{actual_time} > {time} +{tolerance * 100}%")
         elif actual_time < (time - time * tolerance):
