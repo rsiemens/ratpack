@@ -20,7 +20,7 @@ Features:
 
 import io
 import struct
-from typing import TypeAlias, Union
+from typing import Any, Callable, Generic, TypeAlias, Union, TypeVar
 
 RatPrimitive: TypeAlias = Union[
     int,
@@ -77,6 +77,8 @@ NULL = 0xEC
 TAG_SMALL_START = 0xED
 TAG_SMALL_END = 0xFD
 TAG_VAR = 0xFE
+# first 8 tags are reserved
+TAG_RESERVED = {i for i in range(8)}
 
 # The MAGIC_NUMBER_START is only valid at the very begining of a file or ratpack stream.
 # It is not required, but if it is present, it must be immedidiately followed by the ascii encode
@@ -86,6 +88,8 @@ MAGIC_NUMER_TAG = b"rp\x00"
 
 MAX_ENC_INT = 2**128 - 1
 u8packer = struct.Struct(">B")
+f32packer = struct.Struct(">f")
+f64packer = struct.Struct(">d")
 
 
 def leb128_enc(n: int, writer: io.BufferedIOBase):
@@ -129,29 +133,89 @@ def leb128_dec(reader: io.BufferedIOBase) -> int:
     return n
 
 
-class Tag:
-    pass
+T = TypeVar("T")
 
 
-def encode(obj: RatType) -> bytes:
-    encoder = Encoder(io.BytesIO())
+class Tag(Generic[T]):
+    def __init__(
+        self,
+        id: int,
+        obj_type: type[T],
+        encoder: Callable[[T], RatType],
+        decoder: Callable[[RatType], T],
+    ):
+        self.id = id
+        self.obj_type = obj_type
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def encode(self, obj: T) -> RatType:
+        return self.encoder(obj)
+
+    def decode(self, item: RatType) -> T:
+        return self.decoder(item)
+
+    def __repr__(self):
+        return f"<Tag({self.id} {self.obj_type})>"
+
+
+def encode(obj: RatType, tags: set[Tag] | None = None) -> bytes:
+    encoder = Encoder(io.BytesIO(), tags)
     encoder.encode(obj)
     return encoder.stream.getvalue()
 
 
-def decode(bites: bytes) -> RatType:
-    return Decoder(io.BytesIO(bites)).decode()
+def decode(bites: bytes, tags: set[Tag] | None = None) -> RatType:
+    return Decoder(io.BytesIO(bites), tags).decode()
 
 
 # TODO: inherhitance should work. ex `class MyInt(int): ...`
 class Encoder:
-    def __init__(self, stream: io.BufferedIOBase):
+    def __init__(
+        self,
+        stream: io.BufferedIOBase,
+        tags: set[Tag] | None = None,
+        include_header: bool = False,
+    ):
         self.stream = stream
+        self.tags: dict[Any, Tag] = {}
+        self.include_header = include_header
+
+        if tags is not None:
+            tag_ids = TAG_RESERVED.copy()
+            for tag in tags:
+                if tag.id in tag_ids:
+                    raise RatPackException(
+                        f"Tag id {tag.id} is already in use or reserved"
+                    )
+                elif tag.obj_type in self.tags:
+                    existing_tag = self.tags[tag.obj_type]
+                    raise RatPackException(
+                        f"Tag id {tag.id} is already in use by another tag {existing_tag}"
+                    )
+                tag_ids.add(tag.id)
+                self.tags[tag.obj_type] = tag
 
     def encode(self, obj: RatType):
+        if self.include_header:
+            self._encode_header()
+        self._encode(obj)
+
+    def _encode(self, obj: RatType):
         tipe = type(obj).__name__
-        dispatch = getattr(self, f"_encode_{tipe}")
+        dispatch = getattr(self, f"_encode_{tipe}", None)
+
+        # TODO errors on tags[tipe] or dispatch==None
+        if dispatch is None:
+            tag = self.tags[type(obj)]
+            self._encode_tag(tag, obj)
+            return
+
         dispatch(obj)
+
+    def _encode_header(self):
+        self.stream.write(u8packer.pack(MAGIC_NUMBER_START))
+        self.stream.write(MAGIC_NUMER_TAG)
 
     def _encode_int(self, i: int):
         if i >= 0:
@@ -204,7 +268,7 @@ class Encoder:
             leb128_enc(size, self.stream)
 
         for i in l:
-            self.encode(i)
+            self._encode(i)
 
     def _encode_dict(self, d: dict):
         size = len(d)
@@ -215,8 +279,8 @@ class Encoder:
             leb128_enc(size, self.stream)
 
         for k, v in d.items():
-            self.encode(k)
-            self.encode(v)
+            self._encode(k)
+            self._encode(v)
 
     def _encode_float(self, f: float):
         # TODO - f32 vs f64 (smallest first)
@@ -228,146 +292,168 @@ class Encoder:
     def _encode_NoneType(self, _: None):
         self.stream.write(u8packer.pack(NULL))
 
+    def _encode_tag(self, tag: Tag, obj: RatType):
+        rat_obj = tag.encode(obj)
 
-def _not_implemented(marker: int, stream: io.BufferedIOBase):
-    pos = stream.tell()
+        if tag.id <= TAG_SMALL_END - TAG_SMALL_START:
+            self.stream.write(u8packer.pack(TAG_SMALL_START + tag.id))
+        else:
+            self.stream.write(u8packer.pack(TAG_VAR))
+            leb128_enc(tag.id, self.stream)
+
+        self._encode(rat_obj)
+
+
+def _not_implemented(obj, marker: int):
+    pos = obj.stream.tell()
     raise NotImplementedError(f"{hex(marker)} not implemented (at position {pos})")
 
 
 _DECODE_TABLE = [_not_implemented] * 0xFF
 
 
-# inclusive
-def register(start: int, stop: int | None = None):
-    if stop is None:
-        stop = start
+class register:
+    def __init__(self, start: int, stop: int | None = None):
+        self.start = start
+        if stop is None:
+            self.stop = self.start
+        else:
+            self.stop = stop
 
-    def wrapper(func):
-        for i in range(start, stop + 1):
+    def __call__(self, func):
+        # inclusive
+        for i in range(self.start, self.stop + 1):
             _DECODE_TABLE[i] = func
+
         return func
-
-    return wrapper
-
-
-@register(UINT_SMALL_START, UINT_SMALL_END)
-def _decode_small_int(marker: int, _: io.BufferedIOBase) -> int:
-    return marker
-
-
-@register(UINT_VAR)
-def _decode_int_var(_: int, stream: io.BufferedIOBase) -> int:
-    return leb128_dec(stream)
-
-
-@register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
-def _decode_small_neg_int(marker: int, _: io.BufferedIOBase) -> int:
-    return -(marker - NEG_INT_SMALL_START)
-
-
-@register(NEG_INT_VAR)
-def _decode_neg_int_var(_: int, stream: io.BufferedIOBase) -> int:
-    return -(leb128_dec(stream))
-
-
-def _read_n_bytes(size: int, stream: io.BufferedIOBase) -> bytes:
-    val = b""
-    while size > 0:
-        read = stream.read(size)
-        size -= len(read)
-        val += read
-    return val
-
-
-@register(STR_SMALL_NUM_START, STR_SMALL_NUM_END)
-def _decode_small_str(marker: int, stream: io.BufferedIOBase) -> str:
-    size = marker - STR_SMALL_NUM_START
-    return _read_n_bytes(size, stream).decode("utf8")
-
-
-@register(STR_VAR)
-def _decode_str_var(_: int, stream: io.BufferedIOBase) -> str:
-    size = leb128_dec(stream)
-    return _read_n_bytes(size, stream).decode("utf8")
-
-
-@register(ARR_SMALL_NUM_START, ARR_SMALL_NUM_END)
-def _decode_small_arr(marker: int, stream: io.BufferedIOBase) -> list:
-    size = marker - ARR_SMALL_NUM_START
-    ctx = [None] * size
-    for i in range(size):
-        ctx[i] = _visit(stream)
-    return ctx
-
-
-@register(ARR_VAR)
-def _decode_arr_var(_: int, stream: io.BufferedIOBase) -> list:
-    size = leb128_dec(stream)
-    ctx = [None] * size
-    for i in range(size):
-        ctx[i] = _visit(stream)
-    return ctx
-
-
-@register(MAP_SMALL_NUM_START, MAP_SMALL_NUM_END)
-def _decode_small_map(marker: int, stream: io.BufferedIOBase) -> dict:
-    size = marker - MAP_SMALL_NUM_START
-    ctx = {}
-    for _ in range(size):
-        k = _visit(stream)
-        v = _visit(stream)
-        ctx[k] = v
-    return ctx
-
-
-@register(MAP_VAR)
-def _decode_map_var(_: int, stream: io.BufferedIOBase) -> dict:
-    size = leb128_dec(stream)
-    ctx = {}
-    for _ in range(size):
-        k = _visit(stream)
-        ctx[k] = _visit(stream)
-    return ctx
-
-
-@register(FLOAT32)
-def _decode_f32(_: int, stream: io.BufferedIOBase) -> float:
-    bites = _read_n_bytes(4, stream)
-    return struct.unpack(">f", bites)[0]
-
-
-@register(FLOAT64)
-def _decode_f64(_: int, stream: io.BufferedIOBase) -> float:
-    bites = _read_n_bytes(8, stream)
-    return struct.unpack(">d", bites)[0]
-
-
-@register(TRUE)
-def _decode_true(_: int, __: io.BufferedIOBase) -> bool:
-    return True
-
-
-@register(FALSE)
-def _decode_false(_: int, __: io.BufferedIOBase) -> bool:
-    return False
-
-
-@register(NULL)
-def _decode_null(_: int, __: io.BufferedIOBase) -> None:
-    return None
-
-
-def _visit(stream: io.BufferedIOBase):
-    marker = stream.read(1)[0]
-    return _DECODE_TABLE[marker](marker, stream)
 
 
 class Decoder:
-    def __init__(self, stream: io.BufferedIOBase):
+    def __init__(self, stream: io.BufferedIOBase, tags: set[Tag] | None = None):
         self.stream = stream
+        self.tags: dict[int, Tag] = {}
+
+        if tags is not None:
+            tag_ids = TAG_RESERVED.copy()
+            for tag in tags:
+                if tag.id in tag_ids:
+                    raise RatPackException(
+                        f"Tag id {tag.id} is already in use or reserved"
+                    )
+                tag_ids.add(tag.id)
+                self.tags[tag.id] = tag
 
     def decode(self):
-        return _visit(self.stream)
+        return self._visit()
+
+    def _visit(self):
+        marker = self.stream.read(1)[0]
+        return _DECODE_TABLE[marker](self, marker)
+
+    @register(UINT_SMALL_START, UINT_SMALL_END)
+    def _decode_small_int(self, marker: int) -> int:
+        return marker
+
+    @register(UINT_VAR)
+    def _decode_int_var(self, _: int) -> int:
+        return leb128_dec(self.stream)
+
+    @register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
+    def _decode_small_neg_int(self, marker: int) -> int:
+        return -(marker - NEG_INT_SMALL_START)
+
+    @register(NEG_INT_VAR)
+    def _decode_neg_int_var(self, _: int) -> int:
+        return -(leb128_dec(self.stream))
+
+    def _read_n_bytes(self, size: int, stream: io.BufferedIOBase) -> bytes:
+        val = b""
+        while size > 0:
+            read = stream.read(size)
+            size -= len(read)
+            val += read
+        return val
+
+    @register(STR_SMALL_NUM_START, STR_SMALL_NUM_END)
+    def _decode_small_str(self, marker: int) -> str:
+        size = marker - STR_SMALL_NUM_START
+        return self._read_n_bytes(size, self.stream).decode("utf8")
+
+    @register(STR_VAR)
+    def _decode_str_var(self, _: int) -> str:
+        size = leb128_dec(self.stream)
+        return self._read_n_bytes(size, self.stream).decode("utf8")
+
+    @register(ARR_SMALL_NUM_START, ARR_SMALL_NUM_END)
+    def _decode_small_arr(self, marker: int) -> list:
+        size = marker - ARR_SMALL_NUM_START
+        ctx = [None] * size
+        for i in range(size):
+            ctx[i] = self._visit()
+        return ctx
+
+    @register(ARR_VAR)
+    def _decode_arr_var(self, _: int) -> list:
+        size = leb128_dec(self.stream)
+        ctx = [None] * size
+        for i in range(size):
+            ctx[i] = self._visit()
+        return ctx
+
+    @register(MAP_SMALL_NUM_START, MAP_SMALL_NUM_END)
+    def _decode_small_map(self, marker: int) -> dict:
+        size = marker - MAP_SMALL_NUM_START
+        ctx = {}
+        for _ in range(size):
+            k = self._visit()
+            v = self._visit()
+            ctx[k] = v
+        return ctx
+
+    @register(MAP_VAR)
+    def _decode_map_var(self, _: int) -> dict:
+        size = leb128_dec(self.stream)
+        ctx = {}
+        for _ in range(size):
+            k = self._visit()
+            ctx[k] = self._visit()
+        return ctx
+
+    @register(FLOAT32)
+    def _decode_f32(self, _: int) -> float:
+        bites = self._read_n_bytes(4, self.stream)
+        return f32packer.unpack(bites)[0]
+
+    @register(FLOAT64)
+    def _decode_f64(self, _: int) -> float:
+        bites = self._read_n_bytes(8, self.stream)
+        return f64packer.unpack(bites)[0]
+
+    @register(TRUE)
+    def _decode_true(self, _: int) -> bool:
+        return True
+
+    @register(FALSE)
+    def _decode_false(self, _: int) -> bool:
+        return False
+
+    @register(NULL)
+    def _decode_null(self, _: int) -> None:
+        return None
+
+    @register(TAG_SMALL_START, TAG_SMALL_END)
+    def _decode_tag_small(self, marker: int):
+        tag_id = marker - TAG_SMALL_START
+        tag = self.tags[tag_id]
+        obj = self._visit()
+        return tag.decode(obj)
+
+    @register(TAG_VAR)
+    def _decode_tag_var(self, _: int):
+        tag_id = leb128_dec(self.stream)
+        tag = self.tags[tag_id]
+        obj = self._visit()
+        return tag.decode(obj)
 
 
 if __name__ == "__main__":
@@ -375,6 +461,8 @@ if __name__ == "__main__":
     #     print(f"{r.tipe} {hex(r.start)} - {hex(r.end)}")
 
     import ubjson
+    from ubjson.encoder import dumpb as ubjson_dumpb
+    from ubjson.decoder import loadb as ubjson_loadb
     import cbor2
     import json
     import json.scanner
@@ -411,7 +499,7 @@ if __name__ == "__main__":
             data = json.load(f)
 
         report("JSON", data, json.dumps, json.loads)
-        report("ubjson", data, ubjson.dumpb, ubjson.loadb)
+        report("ubjson", data, ubjson_dumpb, ubjson_loadb)
         report("msgpack", data, msgpack.dumps, msgpack.loads)
         report("cbor2", data, cbor2.dumps, cbor2.loads)
         report("ratpack", data, encode, decode)
