@@ -34,7 +34,7 @@ Some notable features (not yet all implemented):
     - Easily comparable. All types are simply compared lexigraphical. This means a unsigned small int < unsigned var int < ... < var len map < ... < var tag
     - Intentional small values. For example small strings can encode a length up to 36 which covers common string representations like uuids and ISO 8601 timestamps.
     - Simple extension type via tags.
-    - [TODO] Deterministic ordering allowing for content adressable storage.
+    - Deterministic ordering allowing for content adressable storage.
 """
 
 import io
@@ -103,10 +103,12 @@ TAG_RESERVED = {i for i in range(8)}
 MAGIC_NUMBER_START = 0xFF
 MAGIC_NUMER_TAG = b"rp\x00"
 
-MAX_ENC_INT = 2**128 - 1
+MAX_ENC_INT = 2**64 - 1
 u8packer = struct.Struct(">B")
 f32packer = struct.Struct(">f")
 f64packer = struct.Struct(">d")
+
+_BYTES_TABLE = [u8packer.pack(i) for i in range(0xFF + 1)]
 
 
 def leb128_enc(n: int, writer: io.BufferedIOBase, max_size: int = MAX_ENC_INT) -> None:
@@ -116,16 +118,16 @@ def leb128_enc(n: int, writer: io.BufferedIOBase, max_size: int = MAX_ENC_INT) -
             f"leb128_enc only encodes positive numbers up to {max_size}. Was given {n}"
         )
     elif n == 0:
-        writer.write(u8packer.pack(0))
+        writer.write(_BYTES_TABLE[0])
         return
 
     while n:
         byte = n & 0x7F  # mask the lower 7 bits leaving the msb as 0
         n >>= 7
         if n:
-            writer.write(u8packer.pack(byte | 0x80))  # msb set to 1 for continuation
+            writer.write(_BYTES_TABLE[byte | 0x80])  # msb set to 1 for continuation
         else:
-            writer.write(u8packer.pack(byte))
+            writer.write(_BYTES_TABLE[byte])
             break
 
 
@@ -231,7 +233,7 @@ class Encoder:
         dispatch(obj)
 
     def _encode_header(self):
-        self.stream.write(u8packer.pack(MAGIC_NUMBER_START))
+        self.stream.write(_BYTES_TABLE[MAGIC_NUMBER_START])
         self.stream.write(MAGIC_NUMER_TAG)
 
     def _encode_int(self, i: int):
@@ -241,25 +243,25 @@ class Encoder:
 
     def _encode_positive_int(self, i: int):
         if i <= UINT_SMALL_END - UINT_SMALL_START:
-            self.stream.write(u8packer.pack(UINT_SMALL_START + i))
+            self.stream.write(_BYTES_TABLE[UINT_SMALL_START + i])
         else:
-            self.stream.write(u8packer.pack(UINT_VAR))
+            self.stream.write(_BYTES_TABLE[UINT_VAR])
             leb128_enc(i, self.stream)
 
     def _encode_negative_int(self, i: int):
         i = abs(i)
         if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START:
-            self.stream.write(u8packer.pack(NEG_INT_SMALL_START + i))
+            self.stream.write(_BYTES_TABLE[NEG_INT_SMALL_START + i])
         else:
-            self.stream.write(u8packer.pack(NEG_INT_VAR))
+            self.stream.write(_BYTES_TABLE[NEG_INT_VAR])
             leb128_enc(i, self.stream)
 
     def _encode_bytes(self, b: bytes):
         size = len(b)
         if size <= BIN_SMALL_END - BIN_SMALL_START:
-            self.stream.write(u8packer.pack(BIN_SMALL_START + size))
+            self.stream.write(_BYTES_TABLE[BIN_SMALL_START + size])
         else:
-            self.stream.write(u8packer.pack(BIN_VAR))
+            self.stream.write(_BYTES_TABLE[BIN_VAR])
             leb128_enc(size, self.stream)
 
         self.stream.write(b)
@@ -269,9 +271,9 @@ class Encoder:
         size = len(val)
 
         if size <= STR_SMALL_NUM_END - STR_SMALL_NUM_START:
-            self.stream.write(u8packer.pack(STR_SMALL_NUM_START + size))
+            self.stream.write(_BYTES_TABLE[STR_SMALL_NUM_START + size])
         else:
-            self.stream.write(u8packer.pack(STR_VAR))
+            self.stream.write(_BYTES_TABLE[STR_VAR])
             leb128_enc(size, self.stream)
 
         self.stream.write(val)
@@ -279,9 +281,9 @@ class Encoder:
     def _encode_list(self, l: list):
         size = len(l)
         if size <= ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
-            self.stream.write(u8packer.pack(ARR_SMALL_NUM_START + size))
+            self.stream.write(_BYTES_TABLE[ARR_SMALL_NUM_START + size])
         else:
-            self.stream.write(u8packer.pack(ARR_VAR))
+            self.stream.write(_BYTES_TABLE[ARR_VAR])
             leb128_enc(size, self.stream)
 
         for i in l:
@@ -290,17 +292,27 @@ class Encoder:
     def _encode_dict(self, d: dict):
         size = len(d)
         if size <= MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
-            self.stream.write(u8packer.pack(MAP_SMALL_NUM_START + size))
+            self.stream.write(_BYTES_TABLE[MAP_SMALL_NUM_START + size])
         else:
-            self.stream.write(u8packer.pack(MAP_VAR))
+            self.stream.write(_BYTES_TABLE[MAP_VAR])
             leb128_enc(size, self.stream)
 
+        parent_stream = self.stream
+        kv_pairs: list[tuple[bytes, Any]] = []
         for k, v in d.items():
+            key_stream = io.BytesIO()
+            self.stream = key_stream
             self._encode(k)
+            kv_pairs.append((key_stream.getvalue(), v))
+
+        self.stream = parent_stream
+        kv_pairs.sort(key=lambda p: p[0])
+
+        for k, v in kv_pairs:
+            self.stream.write(k)
             self._encode(v)
 
     def _encode_float(self, f: float):
-        # this slows us down a good bit...
         can_be_f32 = f32packer.unpack(f32packer.pack(f))[0] == f
         if can_be_f32:
             self.stream.write(struct.pack(">Bf", FLOAT32, f))
@@ -308,18 +320,18 @@ class Encoder:
             self.stream.write(struct.pack(">Bd", FLOAT64, f))
 
     def _encode_bool(self, b: bool):
-        self.stream.write(u8packer.pack(TRUE if b else FALSE))
+        self.stream.write(_BYTES_TABLE[TRUE if b else FALSE])
 
     def _encode_NoneType(self, _: None):
-        self.stream.write(u8packer.pack(NULL))
+        self.stream.write(_BYTES_TABLE[NULL])
 
     def _encode_tag(self, tag: Tag, obj: RatType):
         rat_obj = tag.encode(obj)
 
         if tag.id <= TAG_SMALL_END - TAG_SMALL_START:
-            self.stream.write(u8packer.pack(TAG_SMALL_START + tag.id))
+            self.stream.write(_BYTES_TABLE[TAG_SMALL_START + tag.id])
         else:
-            self.stream.write(u8packer.pack(TAG_VAR))
+            self.stream.write(_BYTES_TABLE[TAG_VAR])
             leb128_enc(tag.id, self.stream)
 
         self._encode(rat_obj)

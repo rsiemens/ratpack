@@ -25,8 +25,6 @@ class LEB128TestCase(unittest.TestCase):
             2**32 - 1,
             2**32,
             2**64 - 1,
-            2**64,
-            2**128 - 1,
         ]
         for i in test_cases:
             buff = io.BytesIO()
@@ -37,7 +35,7 @@ class LEB128TestCase(unittest.TestCase):
             self.assertEqual(n, i)
 
         with self.assertRaises(rp.RatPackException):
-            rp.leb128_enc(2**128, io.BytesIO())
+            rp.leb128_enc(2**64, io.BytesIO())
 
         with self.assertRaises(rp.RatPackException):
             rp.leb128_enc(-1, io.BytesIO())
@@ -61,6 +59,16 @@ class TypesTestCase(unittest.TestCase):
                 self.assertEqual(msg, bytes([rp.NEG_INT_SMALL_START + i]))
 
         self.assertEqual(rp.decode(rp.encode(-0xFFF)), -0xFFF)
+
+    def test_map(self) -> None:
+        self.assertEqual(
+            rp.encode(
+                {"series": "http_resp", "tags": {"status": 200, "method": "GET"}}
+            ),
+            rp.encode(
+                {"tags": {"method": "GET", "status": 200}, "series": "http_resp"}
+            ),
+        )
 
     def test_tag(self) -> None:
         dt_tag = rp.Tag(
@@ -92,13 +100,13 @@ class BenchMarkTestCase(unittest.TestCase):
             {
                 "file": "data/citm_catalog.json",
                 "size": 346063,
-                "enc_time": 0.287119,
+                "enc_time": 0.322958,
                 "dec_time": 0.216958,
             },
             {
                 "file": "data/twitter.json",
                 "size": 401637,
-                "enc_time": 0.104853,
+                "enc_time": 0.130297,
                 "dec_time": 0.075277,
             },
         ]
