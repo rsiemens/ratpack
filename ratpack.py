@@ -4,8 +4,8 @@ Ratpack is a relatively simple and efficent schemaless binary serialization form
 
 import io
 import struct
-from typing import Any, Callable, Generic, TypeAlias, Union, TypeVar, Protocol
 from collections.abc import Buffer
+from typing import Any, Callable, Generic, Protocol, TypeAlias, TypeVar, Union
 
 RatPrimitive: TypeAlias = Union[
     int,
@@ -346,19 +346,19 @@ class register:
 class ItemWrappedStream:
     def __init__(self, stream: BinaryReader):
         self.stream = stream
-        self.item = bytearray()
+        self.item = io.BytesIO()
 
     def read(self, size: int | None = -1) -> bytes:
         bites = self.stream.read(size)
-        self.item.extend(bites)
+        self.item.write(bites)
         return bites
 
     def reset_item(self) -> None:
-        self.item = bytearray()
+        self.item.truncate()
 
-    def get_and_reset_item(self) -> bytearray:
-        item = self.item
-        self.item = bytearray()
+    def get_and_reset_item(self) -> bytes:
+        item = self.item.getvalue()
+        self.item.truncate()
         return item
 
 

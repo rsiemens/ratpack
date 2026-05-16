@@ -18,6 +18,14 @@ py-ubjson = "^0.16.1"
 mypy = "^2.1.0"
 cython = "^3.2.4"
 
+[tool.ruff.lint]
+select = ["PL", "I"]
+ignore = ["PLR0913"]
+
+[tool.mypy]
+disallow_untyped_calls = true
+warn_unreachable = true
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

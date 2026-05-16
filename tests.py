@@ -1,10 +1,11 @@
 import io
-import unittest
-import ratpack as rp
-import timeit
-from datetime import datetime
 import json
+import timeit
+import unittest
+from datetime import datetime
 from typing import cast
+
+import ratpack as rp
 
 
 class LEB128TestCase(unittest.TestCase):
