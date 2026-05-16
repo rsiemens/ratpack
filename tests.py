@@ -4,6 +4,7 @@ import ratpack as rp
 import timeit
 from datetime import datetime
 import json
+from typing import cast
 
 
 class LEB128TestCase(unittest.TestCase):
@@ -75,12 +76,12 @@ class TypesTestCase(unittest.TestCase):
             id=9,
             obj_type=datetime,
             encoder=lambda dt: dt.isoformat(),
-            decoder=lambda s: datetime.fromisoformat(s),
+            decoder=lambda s: datetime.fromisoformat(cast(str, s)),
         )
 
         dt = datetime.now()
-        bites = rp.encode(dt, tags={dt_tag})
-        data = rp.decode(bites, tags={dt_tag})
+        bites = rp.encode(dt, tags=[dt_tag])
+        data = rp.decode(bites, tags=[dt_tag])
         self.assertEqual(dt, data)
 
 
@@ -94,20 +95,20 @@ class BenchMarkTestCase(unittest.TestCase):
                 "file": "data/canada.json",
                 "size": 1055458,
                 # time of 10 iterations
-                "enc_time": 0.592634,
-                "dec_time": 0.416291,
+                "enc_time": 0.708890,
+                "dec_time": 1.282076,
             },
             {
                 "file": "data/citm_catalog.json",
                 "size": 346063,
-                "enc_time": 0.322958,
-                "dec_time": 0.216958,
+                "enc_time": 0.393025,
+                "dec_time": 0.759894,
             },
             {
                 "file": "data/twitter.json",
                 "size": 401637,
-                "enc_time": 0.130297,
-                "dec_time": 0.075277,
+                "enc_time": 0.157244,
+                "dec_time": 0.266518,
             },
         ]
         return super().setUpClass()

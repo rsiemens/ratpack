@@ -1,45 +1,11 @@
 """
 Ratpack is a relatively simple and efficent schemaless binary serialization format.
-
-It takes inspiration from msgpack, cbor, and protobuf.
-
-Ratpack splits it's types across a one byte number range (0-255) and assigns types to different
-ranges. For example small strings cover 0x76 - 0x9A while variable length strings are assigned 0x9B.
-
-The full range is as follows:
-    - unsigned small int 0x00-0x40
-    - unsigned var int 0x41
-    - negative small int 0x42-0x62
-    - negative var int 0x63
-    - small byte str 0x64-0x74
-    - var len byte str 0x75
-    - small utf8 enc str 0x76-0x9A
-    - var len utf8 enc str 0x9B
-    - small array 0x9C-0xC0
-    - var len array 0xC1-0xC2
-    - small map 0xC2-0xE6
-    - var len map 0xE7
-    - IEEE 754 float32 0xE8
-    - IEEE 754 float64 0xE9
-    - true 0xEA
-    - false 0xEB
-    - null 0xEC
-    - small tag 0xED-0xFD
-    - var tag 0xFE
-
-Variable size ints and length are implemented using unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128)
-encoding which allows storing arbitrary length ints.
-
-Some notable features (not yet all implemented):
-    - Easily comparable. All types are simply compared lexigraphical. This means a unsigned small int < unsigned var int < ... < var len map < ... < var tag
-    - Intentional small values. For example small strings can encode a length up to 36 which covers common string representations like uuids and ISO 8601 timestamps.
-    - Simple extension type via tags.
-    - Deterministic ordering allowing for content adressable storage.
 """
 
 import io
 import struct
-from typing import Any, Callable, Generic, TypeAlias, Union, TypeVar
+from typing import Any, Callable, Generic, TypeAlias, Union, TypeVar, Protocol
+from collections.abc import Buffer
 
 RatPrimitive: TypeAlias = Union[
     int,
@@ -57,7 +23,23 @@ RatType: TypeAlias = Union[
 ]
 
 
+class BinaryReader(Protocol):
+    def read(self, size: int | None = -1, /) -> bytes: ...
+
+
+class BinaryWriter(Protocol):
+    def write(self, bites: Buffer, /) -> int: ...
+
+
 class RatPackException(Exception):
+    pass
+
+
+class RatPackEncodingException(RatPackException):
+    pass
+
+
+class RatPackDecodingException(RatPackException):
     pass
 
 
@@ -101,7 +83,7 @@ TAG_RESERVED = {i for i in range(8)}
 # It is not required, but if it is present, it must be immedidiately followed by the ascii encode
 # characters "rp" and a version byte 0x00-0xFF.
 MAGIC_NUMBER_START = 0xFF
-MAGIC_NUMER_TAG = b"rp\x00"
+MAGIC_NUMER_SIG = b"rp\x00"
 
 MAX_ENC_INT = 2**64 - 1
 u8packer = struct.Struct(">B")
@@ -111,10 +93,10 @@ f64packer = struct.Struct(">d")
 _BYTES_TABLE = [u8packer.pack(i) for i in range(0xFF + 1)]
 
 
-def leb128_enc(n: int, writer: io.BufferedIOBase, max_size: int = MAX_ENC_INT) -> None:
+def leb128_enc(n: int, writer: BinaryWriter, max_size: int = MAX_ENC_INT) -> None:
     """Little endian base 128 https://en.wikipedia.org/wiki/LEB128"""
     if n < 0 or n > max_size:
-        raise RatPackException(
+        raise RatPackEncodingException(
             f"leb128_enc only encodes positive numbers up to {max_size}. Was given {n}"
         )
     elif n == 0:
@@ -131,7 +113,7 @@ def leb128_enc(n: int, writer: io.BufferedIOBase, max_size: int = MAX_ENC_INT) -
             break
 
 
-def leb128_dec(reader: io.BufferedIOBase) -> int:
+def leb128_dec(reader: BinaryReader) -> int:
     n = 0
     shift = 0
 
@@ -139,14 +121,14 @@ def leb128_dec(reader: io.BufferedIOBase) -> int:
         try:
             byte = reader.read(1)[0]
         except IndexError:
-            raise RatPackException("Malformed leb128 encoded payload")
+            raise RatPackDecodingException("Malformed leb128 encoded payload")
 
         n |= (byte & 0x7F) << shift
         shift += 7
         if byte & 0x80 == 0:
             break
         if n > MAX_ENC_INT:
-            raise RatPackException(
+            raise RatPackDecodingException(
                 f"Malformed leb128 encoded value. Exceeds max int ({MAX_ENC_INT})"
             )
     return n
@@ -178,22 +160,22 @@ class Tag(Generic[T]):
         return f"<Tag({self.id} {self.obj_type})>"
 
 
-def encode(obj: Any, tags: set[Tag] | None = None) -> bytes:
+def encode(obj: Any, tags: list[Tag] | None = None) -> bytes:
     stream = io.BytesIO()
     encoder = Encoder(stream, tags)
     encoder.encode(obj)
     return stream.getvalue()
 
 
-def decode(bites: bytes, tags: set[Tag] | None = None) -> Any:
+def decode(bites: bytes, tags: list[Tag] | None = None) -> Any:
     return Decoder(io.BytesIO(bites), tags).decode()
 
 
 class Encoder:
     def __init__(
         self,
-        stream: io.BufferedIOBase,
-        tags: set[Tag] | None = None,
+        stream: BinaryWriter,
+        tags: list[Tag] | None = None,
         include_header: bool = False,
     ):
         self.stream = stream
@@ -232,23 +214,23 @@ class Encoder:
 
         dispatch(obj)
 
-    def _encode_header(self):
+    def _encode_header(self) -> None:
         self.stream.write(_BYTES_TABLE[MAGIC_NUMBER_START])
-        self.stream.write(MAGIC_NUMER_TAG)
+        self.stream.write(MAGIC_NUMER_SIG)
 
-    def _encode_int(self, i: int):
+    def _encode_int(self, i: int) -> None:
         if i >= 0:
             return self._encode_positive_int(i)
         return self._encode_negative_int(i)
 
-    def _encode_positive_int(self, i: int):
+    def _encode_positive_int(self, i: int) -> None:
         if i <= UINT_SMALL_END - UINT_SMALL_START:
             self.stream.write(_BYTES_TABLE[UINT_SMALL_START + i])
         else:
             self.stream.write(_BYTES_TABLE[UINT_VAR])
             leb128_enc(i, self.stream)
 
-    def _encode_negative_int(self, i: int):
+    def _encode_negative_int(self, i: int) -> None:
         i = abs(i)
         if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START:
             self.stream.write(_BYTES_TABLE[NEG_INT_SMALL_START + i])
@@ -256,7 +238,7 @@ class Encoder:
             self.stream.write(_BYTES_TABLE[NEG_INT_VAR])
             leb128_enc(i, self.stream)
 
-    def _encode_bytes(self, b: bytes):
+    def _encode_bytes(self, b: bytes) -> None:
         size = len(b)
         if size <= BIN_SMALL_END - BIN_SMALL_START:
             self.stream.write(_BYTES_TABLE[BIN_SMALL_START + size])
@@ -266,7 +248,7 @@ class Encoder:
 
         self.stream.write(b)
 
-    def _encode_str(self, s: str):
+    def _encode_str(self, s: str) -> None:
         val = s.encode("utf8")
         size = len(val)
 
@@ -278,18 +260,18 @@ class Encoder:
 
         self.stream.write(val)
 
-    def _encode_list(self, l: list):
-        size = len(l)
+    def _encode_list(self, items: list) -> None:
+        size = len(items)
         if size <= ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
             self.stream.write(_BYTES_TABLE[ARR_SMALL_NUM_START + size])
         else:
             self.stream.write(_BYTES_TABLE[ARR_VAR])
             leb128_enc(size, self.stream)
 
-        for i in l:
+        for i in items:
             self._encode(i)
 
-    def _encode_dict(self, d: dict):
+    def _encode_dict(self, d: dict) -> None:
         size = len(d)
         if size <= MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
             self.stream.write(_BYTES_TABLE[MAP_SMALL_NUM_START + size])
@@ -312,20 +294,20 @@ class Encoder:
             self.stream.write(k)
             self._encode(v)
 
-    def _encode_float(self, f: float):
+    def _encode_float(self, f: float) -> None:
         can_be_f32 = f32packer.unpack(f32packer.pack(f))[0] == f
         if can_be_f32:
             self.stream.write(struct.pack(">Bf", FLOAT32, f))
         else:
             self.stream.write(struct.pack(">Bd", FLOAT64, f))
 
-    def _encode_bool(self, b: bool):
+    def _encode_bool(self, b: bool) -> None:
         self.stream.write(_BYTES_TABLE[TRUE if b else FALSE])
 
-    def _encode_NoneType(self, _: None):
+    def _encode_NoneType(self, _: None) -> None:
         self.stream.write(_BYTES_TABLE[NULL])
 
-    def _encode_tag(self, tag: Tag, obj: RatType):
+    def _encode_tag(self, tag: Tag, obj: RatType) -> None:
         rat_obj = tag.encode(obj)
 
         if tag.id <= TAG_SMALL_END - TAG_SMALL_START:
@@ -337,7 +319,7 @@ class Encoder:
         self._encode(rat_obj)
 
 
-def _not_implemented(obj, marker: int):
+def _not_implemented(obj, marker: int) -> None:
     pos = obj.stream.tell()
     raise NotImplementedError(f"{hex(marker)} not implemented (at position {pos})")
 
@@ -361,10 +343,30 @@ class register:
         return func
 
 
+class ItemWrappedStream:
+    def __init__(self, stream: BinaryReader):
+        self.stream = stream
+        self.item = bytearray()
+
+    def read(self, size: int | None = -1) -> bytes:
+        bites = self.stream.read(size)
+        self.item.extend(bites)
+        return bites
+
+    def reset_item(self) -> None:
+        self.item = bytearray()
+
+    def get_and_reset_item(self) -> bytearray:
+        item = self.item
+        self.item = bytearray()
+        return item
+
+
 class Decoder:
-    def __init__(self, stream: io.BufferedIOBase, tags: set[Tag] | None = None):
+    def __init__(self, stream: BinaryReader, tags: list[Tag] | None = None):
         self.stream = stream
         self.tags: dict[int, Tag] = {}
+        self._first_visit = True
 
         if tags is not None:
             for tag in tags:
@@ -374,20 +376,30 @@ class Decoder:
                     )
                 self.tags[tag.id] = tag
 
-    def decode(self):
+    def decode(self) -> Any:
         return self._visit()
 
-    def _visit(self):
+    def _visit(self) -> Any:
         marker = self.stream.read(1)[0]
+        if self._first_visit:
+            self._first_visit = False
+            if marker == MAGIC_NUMBER_START:
+                sig = self.stream.read(3)
+                if sig != MAGIC_NUMER_SIG:
+                    raise RatPackDecodingException("invalid file signature")
+
         return _DECODE_TABLE[marker](self, marker)
 
     @register(UINT_SMALL_START, UINT_SMALL_END)
-    def _decode_small_int(self, marker: int) -> int:
+    def _decode_small_uint(self, marker: int) -> int:
         return marker
 
     @register(UINT_VAR)
-    def _decode_int_var(self, _: int) -> int:
-        return leb128_dec(self.stream)
+    def _decode_uint_var(self, _: int) -> int:
+        n = leb128_dec(self.stream)
+        if n < UINT_SMALL_END - UINT_SMALL_START:
+            raise RatPackDecodingException("small unsigned int encoded as var int")
+        return n
 
     @register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
     def _decode_small_neg_int(self, marker: int) -> int:
@@ -395,15 +407,32 @@ class Decoder:
 
     @register(NEG_INT_VAR)
     def _decode_neg_int_var(self, _: int) -> int:
-        return -(leb128_dec(self.stream))
+        n = leb128_dec(self.stream)
+        if n < NEG_INT_SMALL_END - NEG_INT_SMALL_START:
+            raise RatPackDecodingException(
+                "small negative int encoded as negative var int"
+            )
+        return -n
 
-    def _read_n_bytes(self, size: int, stream: io.BufferedIOBase) -> bytes:
+    def _read_n_bytes(self, size: int, stream: BinaryReader) -> bytes:
         val = b""
         while size > 0:
             read = stream.read(size)
             size -= len(read)
             val += read
         return val
+
+    @register(BIN_SMALL_START, BIN_SMALL_START)
+    def _decode_small_bin(self, marker: int) -> bytes:
+        size = marker - BIN_SMALL_START
+        return self._read_n_bytes(size, self.stream)
+
+    @register(BIN_VAR)
+    def _decode_bin_var(self, _: int) -> bytes:
+        size = leb128_dec(self.stream)
+        if size < BIN_SMALL_END - BIN_SMALL_START:
+            raise RatPackDecodingException("small bin encoded as bin var")
+        return self._read_n_bytes(size, self.stream)
 
     @register(STR_SMALL_NUM_START, STR_SMALL_NUM_END)
     def _decode_small_str(self, marker: int) -> str:
@@ -413,6 +442,8 @@ class Decoder:
     @register(STR_VAR)
     def _decode_str_var(self, _: int) -> str:
         size = leb128_dec(self.stream)
+        if size < STR_SMALL_NUM_END - STR_SMALL_NUM_START:
+            raise RatPackDecodingException("small str encoded as str var")
         return self._read_n_bytes(size, self.stream).decode("utf8")
 
     @register(ARR_SMALL_NUM_START, ARR_SMALL_NUM_END)
@@ -426,6 +457,9 @@ class Decoder:
     @register(ARR_VAR)
     def _decode_arr_var(self, _: int) -> list:
         size = leb128_dec(self.stream)
+        if size < ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
+            raise RatPackDecodingException("small array encoded as array var")
+
         ctx = [None] * size
         for i in range(size):
             ctx[i] = self._visit()
@@ -434,20 +468,34 @@ class Decoder:
     @register(MAP_SMALL_NUM_START, MAP_SMALL_NUM_END)
     def _decode_small_map(self, marker: int) -> dict:
         size = marker - MAP_SMALL_NUM_START
-        ctx = {}
-        for _ in range(size):
-            k = self._visit()
-            v = self._visit()
-            ctx[k] = v
-        return ctx
+        return self._decode_map_items(size)
 
     @register(MAP_VAR)
     def _decode_map_var(self, _: int) -> dict:
         size = leb128_dec(self.stream)
+        if size < MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
+            raise RatPackDecodingException("small map encoded as map var")
+
+        return self._decode_map_items(size)
+
+    def _decode_map_items(self, size: int) -> dict:
         ctx = {}
+        self.stream = ItemWrappedStream(self.stream)
+        last_item = None
+
         for _ in range(size):
             k = self._visit()
+
+            item = self.stream.get_and_reset_item()
+            # transitivity ensures all keys are lexigraphicaly orderd smallest to largest
+            if last_item is not None and item < last_item:
+                raise RatPackDecodingException("map keys are out of order")
+            last_item = item
+
             ctx[k] = self._visit()
+            self.stream.reset_item()
+
+        self.stream = self.stream.stream
         return ctx
 
     @register(FLOAT32)
@@ -458,7 +506,13 @@ class Decoder:
     @register(FLOAT64)
     def _decode_f64(self, _: int) -> float:
         bites = self._read_n_bytes(8, self.stream)
-        return f64packer.unpack(bites)[0]
+        f = f64packer.unpack(bites)[0]
+
+        can_be_f32 = f32packer.unpack(f32packer.pack(f))[0] == f
+        if can_be_f32:
+            raise RatPackDecodingException("f32 representable float encoded as f64")
+
+        return f
 
     @register(TRUE)
     def _decode_true(self, _: int) -> bool:
@@ -473,15 +527,19 @@ class Decoder:
         return None
 
     @register(TAG_SMALL_START, TAG_SMALL_END)
-    def _decode_tag_small(self, marker: int):
+    def _decode_tag_small(self, marker: int) -> RatType:
         tag_id = marker - TAG_SMALL_START
         tag = self.tags[tag_id]
         obj = self._visit()
         return tag.decode(obj)
 
     @register(TAG_VAR)
-    def _decode_tag_var(self, _: int):
+    def _decode_tag_var(self, _: int) -> RatType:
         tag_id = leb128_dec(self.stream)
+
+        if tag_id < TAG_SMALL_END - TAG_SMALL_START:
+            raise RatPackDecodingException("small tag encoded as tag var")
+
         tag = self.tags[tag_id]
         obj = self._visit()
         return tag.decode(obj)
