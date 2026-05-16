@@ -136,7 +136,7 @@ class BenchMarkTestCase(unittest.TestCase):
             with self.subTest(file=bench["file"]):
                 self._benchmark(bench)
 
-    def _benchmark(self, bench) -> None:
+    def _benchmark(self, bench: dict) -> None:
         with open(bench["file"]) as f:
             data = json.load(f)
             timer = timeit.Timer("rp.encode(data)", globals={"rp": rp, "data": data})
@@ -159,7 +159,9 @@ class BenchMarkTestCase(unittest.TestCase):
             self.assert_in_range(min(enc_time), bench["enc_time"], 0.1)
             self.assert_in_range(min(dec_time), bench["dec_time"], 0.1)
 
-    def assert_in_range(self, actual_time, time, tolerance) -> None:
+    def assert_in_range(
+        self, actual_time: float, time: float, tolerance: float
+    ) -> None:
         if actual_time > (time + time * tolerance):
             self.fail(f"{actual_time} > {time} +{tolerance * 100}%")
         elif actual_time < (time - time * tolerance):

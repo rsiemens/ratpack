@@ -2,6 +2,8 @@
 Ratpack is a relatively simple and efficent schemaless binary serialization format.
 """
 
+from __future__ import annotations
+
 import io
 import struct
 from collections.abc import Buffer
@@ -156,7 +158,7 @@ class Tag(Generic[T]):
     def decode(self, item: RatType) -> T:
         return self.decoder(item)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Tag({self.id} {self.obj_type})>"
 
 
@@ -197,12 +199,12 @@ class Encoder:
                 tag_ids.add(tag.id)
                 self.tags[tag.obj_type] = tag
 
-    def encode(self, obj: Any):
+    def encode(self, obj: Any) -> None:
         if self.include_header:
             self._encode_header()
         self._encode(obj)
 
-    def _encode(self, obj: Any):
+    def _encode(self, obj: Any) -> None:
         tipe = type(obj).__name__
         dispatch = getattr(self, f"_encode_{tipe}", None)
 
@@ -319,9 +321,8 @@ class Encoder:
         self._encode(rat_obj)
 
 
-def _not_implemented(obj, marker: int) -> None:
-    pos = obj.stream.tell()
-    raise NotImplementedError(f"{hex(marker)} not implemented (at position {pos})")
+def _not_implemented(_: Decoder, marker: int) -> None:
+    raise NotImplementedError(f"{hex(marker)} not implemented")
 
 
 _DECODE_TABLE = [_not_implemented] * 0xFF
@@ -335,7 +336,7 @@ class register:
         else:
             self.stop = stop
 
-    def __call__(self, func):
+    def __call__(self, func: Callable) -> Callable:
         # inclusive
         for i in range(self.start, self.stop + 1):
             _DECODE_TABLE[i] = func
