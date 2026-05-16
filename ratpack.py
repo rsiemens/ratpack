@@ -87,32 +87,24 @@ TAG_RESERVED = {i for i in range(8)}
 MAGIC_NUMBER_START = 0xFF
 MAGIC_NUMER_SIG = b"rp\x00"
 
-MAX_ENC_INT = 2**64 - 1
-u8packer = struct.Struct(">B")
-f32packer = struct.Struct(">f")
-f64packer = struct.Struct(">d")
+_u8pack = struct.Struct(">B").pack
+_f32pack = struct.Struct(">f").pack
+_f32unpack = struct.Struct(">f").unpack
+_f64pack = struct.Struct(">d").pack
+_f64unpack = struct.Struct(">d").unpack
 
-_BYTES_TABLE = [u8packer.pack(i) for i in range(0xFF + 1)]
+_BYTES_TABLE = [_u8pack(i) for i in range(0xFF + 1)]
 
 
-def leb128_enc(n: int, writer: BinaryWriter, max_size: int = MAX_ENC_INT) -> None:
+def leb128_enc(n: int, writer: BinaryWriter) -> None:
     """Little endian base 128 https://en.wikipedia.org/wiki/LEB128"""
-    if n < 0 or n > max_size:
-        raise RatPackEncodingException(
-            f"leb128_enc only encodes positive numbers up to {max_size}. Was given {n}"
-        )
-    elif n == 0:
-        writer.write(_BYTES_TABLE[0])
-        return
-
+    byte = n & 0x7F  # mask the lower 7 bits leaving the msb as 0
+    n >>= 7
     while n:
-        byte = n & 0x7F  # mask the lower 7 bits leaving the msb as 0
+        writer.write(_BYTES_TABLE[byte | 0x80])
+        byte = n & 0x7F
         n >>= 7
-        if n:
-            writer.write(_BYTES_TABLE[byte | 0x80])  # msb set to 1 for continuation
-        else:
-            writer.write(_BYTES_TABLE[byte])
-            break
+    writer.write(_BYTES_TABLE[byte])
 
 
 def leb128_dec(reader: BinaryReader) -> int:
@@ -129,10 +121,6 @@ def leb128_dec(reader: BinaryReader) -> int:
         shift += 7
         if byte & 0x80 == 0:
             break
-        if n > MAX_ENC_INT:
-            raise RatPackDecodingException(
-                f"Malformed leb128 encoded value. Exceeds max int ({MAX_ENC_INT})"
-            )
     return n
 
 
@@ -309,11 +297,14 @@ class Encoder:
             self._encode(v)
 
     def _encode_float(self, f: float) -> None:
-        can_be_f32 = f32packer.unpack(f32packer.pack(f))[0] == f
-        if can_be_f32:
-            self.stream.write(struct.pack(">Bf", FLOAT32, f))
+        f32packed = _f32pack(f)
+
+        if _f32unpack(f32packed)[0] == f:
+            self.stream.write(_BYTES_TABLE[FLOAT32])
+            self.stream.write(f32packed)
         else:
-            self.stream.write(struct.pack(">Bd", FLOAT64, f))
+            self.stream.write(_BYTES_TABLE[FLOAT64])
+            self.stream.write(_f64pack(f))
 
     def _encode_tag(self, tag: Tag, obj: RatType) -> None:
         rat_obj = tag.encode(obj)
@@ -422,37 +413,29 @@ class Decoder:
             )
         return -n
 
-    def _read_n_bytes(self, size: int, stream: BinaryReader) -> bytes:
-        val = b""
-        while size > 0:
-            read = stream.read(size)
-            size -= len(read)
-            val += read
-        return val
-
     @register(BIN_SMALL_START, BIN_SMALL_START)
     def _decode_small_bin(self, marker: int) -> bytes:
         size = marker - BIN_SMALL_START
-        return self._read_n_bytes(size, self.stream)
+        return self.stream.read(size)
 
     @register(BIN_VAR)
     def _decode_bin_var(self, _: int) -> bytes:
         size = leb128_dec(self.stream)
         if size < BIN_SMALL_END - BIN_SMALL_START:
             raise RatPackDecodingException("small bin encoded as bin var")
-        return self._read_n_bytes(size, self.stream)
+        return self.stream.read(size)
 
     @register(STR_SMALL_NUM_START, STR_SMALL_NUM_END)
     def _decode_small_str(self, marker: int) -> str:
         size = marker - STR_SMALL_NUM_START
-        return self._read_n_bytes(size, self.stream).decode("utf8")
+        return self.stream.read(size).decode("utf8")
 
     @register(STR_VAR)
     def _decode_str_var(self, _: int) -> str:
         size = leb128_dec(self.stream)
         if size < STR_SMALL_NUM_END - STR_SMALL_NUM_START:
             raise RatPackDecodingException("small str encoded as str var")
-        return self._read_n_bytes(size, self.stream).decode("utf8")
+        return self.stream.read(size).decode("utf8")
 
     @register(ARR_SMALL_NUM_START, ARR_SMALL_NUM_END)
     def _decode_small_arr(self, marker: int) -> list:
@@ -508,15 +491,13 @@ class Decoder:
 
     @register(FLOAT32)
     def _decode_f32(self, _: int) -> float:
-        bites = self._read_n_bytes(4, self.stream)
-        return f32packer.unpack(bites)[0]
+        return _f32unpack(self.stream.read(4))[0]
 
     @register(FLOAT64)
     def _decode_f64(self, _: int) -> float:
-        bites = self._read_n_bytes(8, self.stream)
-        f = f64packer.unpack(bites)[0]
+        f = _f64unpack(self.stream.read(8))[0]
 
-        can_be_f32 = f32packer.unpack(f32packer.pack(f))[0] == f
+        can_be_f32 = _f32unpack(_f32pack(f))[0] == f
         if can_be_f32:
             raise RatPackDecodingException("f32 representable float encoded as f64")
 

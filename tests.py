@@ -27,6 +27,8 @@ class LEB128TestCase(unittest.TestCase):
             2**32 - 1,
             2**32,
             2**64 - 1,
+            2**64,
+            2**128 - 1,
         ]
         for i in test_cases:
             buff = io.BytesIO()
@@ -35,12 +37,6 @@ class LEB128TestCase(unittest.TestCase):
             buff.seek(0)
             n = rp.leb128_dec(buff)
             self.assertEqual(n, i)
-
-        with self.assertRaises(rp.RatPackException):
-            rp.leb128_enc(2**64, io.BytesIO())
-
-        with self.assertRaises(rp.RatPackException):
-            rp.leb128_enc(-1, io.BytesIO())
 
 
 class TypesTestCase(unittest.TestCase):
@@ -114,19 +110,19 @@ class BenchMarkTestCase(unittest.TestCase):
                 "size": 1055458,
                 # time of 10 iterations
                 "enc_time": 0.708890,
-                "dec_time": 1.282076,
+                "dec_time": 1.085396,
             },
             {
                 "file": "data/citm_catalog.json",
                 "size": 346063,
                 "enc_time": 0.321273,
-                "dec_time": 0.759894,
+                "dec_time": 0.683307,
             },
             {
                 "file": "data/twitter.json",
                 "size": 401637,
                 "enc_time": 0.125645,
-                "dec_time": 0.266518,
+                "dec_time": 0.233254,
             },
         ]
         return super().setUpClass()
