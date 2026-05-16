@@ -119,13 +119,13 @@ class BenchMarkTestCase(unittest.TestCase):
             {
                 "file": "data/citm_catalog.json",
                 "size": 346063,
-                "enc_time": 0.393025,
+                "enc_time": 0.321273,
                 "dec_time": 0.759894,
             },
             {
                 "file": "data/twitter.json",
                 "size": 401637,
-                "enc_time": 0.157244,
+                "enc_time": 0.125645,
                 "dec_time": 0.266518,
             },
         ]

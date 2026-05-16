@@ -205,16 +205,28 @@ class Encoder:
         self._encode(obj)
 
     def _encode(self, obj: Any) -> None:
-        tipe = type(obj).__name__
-        dispatch = getattr(self, f"_encode_{tipe}", None)
-
-        # TODO errors on tags[tipe] or dispatch==None
-        if dispatch is None:
-            tag = self.tags[type(obj)]
+        if isinstance(obj, int):
+            self._encode_int(obj)
+        elif isinstance(obj, bytes):
+            self._encode_bytes(obj)
+        elif isinstance(obj, str):
+            self._encode_str(obj)
+        elif isinstance(obj, list):
+            self._encode_list(obj)
+        elif isinstance(obj, dict):
+            self._encode_dict(obj)
+        elif isinstance(obj, float):
+            self._encode_float(obj)
+        elif isinstance(obj, bool):
+            self.stream.write(_BYTES_TABLE[TRUE if obj else FALSE])
+        elif obj is None:
+            self.stream.write(_BYTES_TABLE[NULL])
+        else:
+            try:
+                tag = self.tags[type(obj)]
+            except KeyError:
+                raise RatPackEncodingException(f"unable to encode {type(obj)}")
             self._encode_tag(tag, obj)
-            return
-
-        dispatch(obj)
 
     def _encode_header(self) -> None:
         self.stream.write(_BYTES_TABLE[MAGIC_NUMBER_START])
@@ -233,7 +245,7 @@ class Encoder:
             leb128_enc(i, self.stream)
 
     def _encode_negative_int(self, i: int) -> None:
-        i = abs(i)
+        i = -i
         if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START:
             self.stream.write(_BYTES_TABLE[NEG_INT_SMALL_START + i])
         else:
@@ -302,12 +314,6 @@ class Encoder:
             self.stream.write(struct.pack(">Bf", FLOAT32, f))
         else:
             self.stream.write(struct.pack(">Bd", FLOAT64, f))
-
-    def _encode_bool(self, b: bool) -> None:
-        self.stream.write(_BYTES_TABLE[TRUE if b else FALSE])
-
-    def _encode_NoneType(self, _: None) -> None:
-        self.stream.write(_BYTES_TABLE[NULL])
 
     def _encode_tag(self, tag: Tag, obj: RatType) -> None:
         rat_obj = tag.encode(obj)
