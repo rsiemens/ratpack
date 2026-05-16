@@ -387,6 +387,7 @@ class Decoder:
                 sig = self.stream.read(3)
                 if sig != MAGIC_NUMER_SIG:
                     raise RatPackDecodingException("invalid file signature")
+                return self._visit()
 
         return _DECODE_TABLE[marker](self, marker)
 

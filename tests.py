@@ -71,6 +71,23 @@ class TypesTestCase(unittest.TestCase):
             ),
         )
 
+    def test_header(self) -> None:
+        header = bytes([rp.MAGIC_NUMBER_START]) + rp.MAGIC_NUMER_SIG
+        obj = [123, "abc"]
+        stream = io.BytesIO()
+        rp.Encoder(stream, include_header=True).encode(obj)
+
+        bites = stream.getbuffer()
+        self.assertEqual(bites[: len(header)], header)
+
+        decoded = rp.Decoder(io.BytesIO(bites)).decode()
+        self.assertEqual(decoded, obj)
+
+        with self.assertRaises(rp.RatPackDecodingException):
+            # corrupt header signature
+            bites[1] = 0x01
+            rp.Decoder(io.BytesIO(bites)).decode()
+
     def test_tag(self) -> None:
         dt_tag = rp.Tag(
             id=9,
