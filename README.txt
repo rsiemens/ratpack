@@ -5,8 +5,9 @@ inspiration from msgpack, cbor, and protobuf.
 
 Some notable features:
     - Intentionally chosen small values. For example small strings can encode a length up to 36
-      which covers common JSON string representations like uuids and ISO 8601 timestamps.
-    - Deterministic ordering allowing for content adressable storage[1].
+      which covers common JSON string representations like uuids and ISO 8601 timestamps. This
+      keeps it competitive, and often smaller[1], than similar formats.
+    - Deterministic ordering allowing for content adressable storage[2].
     - Simple extension type via tags.
 
 Ratpack splits it's types across a one byte number range (0-255) and assigns types to different
@@ -41,7 +42,7 @@ The full set of types and there ranges are as follows:
     - var tag 0xFE (tag ids > 16)
     - start of file signature magic number 0xFF (more on this further down)
 
-Variable size ints and length are implemented using unsigned LEB128[2] encoding which allows storing
+Variable size ints and length are implemented using unsigned LEB128[3] encoding which allows storing
 arbitrary length ints and sizes.
 
 In order to maintain deterministic map ordering, encoders should always use the smallest
@@ -61,5 +62,6 @@ bytes 0x72 0x70 and a version byte 0x00-0xFF. For the current verions (0x00) the
 look like b"\xffrp\x00".
 
 
-1: https://en.wikipedia.org/wiki/Content-addressable_storage
-2: https://en.wikipedia.org/wiki/LEB128
+1: https://github.com/rsiemens/ratpack/blob/main/chart.png
+2: https://en.wikipedia.org/wiki/Content-addressable_storage
+3: https://en.wikipedia.org/wiki/LEB128
