@@ -96,79 +96,79 @@ class TypesTestCase(unittest.TestCase):
 
     def test_uint(self) -> None:
         for i in range(0, 64):
-            bites = rp.encode(i)
+            bites = rp.packb(i)
             self.assertEqual(len(bites), 1)
-            self.assertEqual(rp.decode(bites), i)
+            self.assertEqual(rp.unpackb(bites), i)
 
-        bites = rp.encode(65)
+        bites = rp.packb(65)
         self.assertEqual(len(bites), 2)
-        self.assertEqual(rp.decode(bites), 65)
+        self.assertEqual(rp.unpackb(bites), 65)
 
     def test_negint(self) -> None:
         for i in range(1, 34):
-            bites = rp.encode(-i)
+            bites = rp.packb(-i)
             self.assertEqual(len(bites), 1)
-            self.assertEqual(rp.decode(bites), -i)
+            self.assertEqual(rp.unpackb(bites), -i)
 
-        bites = rp.encode(-34)
+        bites = rp.packb(-34)
         self.assertEqual(len(bites), 2)
-        self.assertEqual(rp.decode(bites), -34)
+        self.assertEqual(rp.unpackb(bites), -34)
 
     def test_binary(self) -> None:
         for i in range(0, 17):
             bin_str = b"x" * i
-            bites = rp.encode(bin_str)
+            bites = rp.packb(bin_str)
             self.assertEqual(len(bites), i + 1)
-            self.assertEqual(rp.decode(bites), bin_str)
+            self.assertEqual(rp.unpackb(bites), bin_str)
 
         bin_str = b"x" * 17
-        bites = rp.encode(bin_str)
+        bites = rp.packb(bin_str)
         self.assertEqual(len(bites), len(bin_str) + 2)
-        self.assertEqual(rp.decode(bites), bin_str)
+        self.assertEqual(rp.unpackb(bites), bin_str)
 
     def test_str(self) -> None:
         for i in range(0, 37):
             s = "x" * i
-            bites = rp.encode(s)
+            bites = rp.packb(s)
             self.assertEqual(len(bites), i + 1)
-            self.assertEqual(rp.decode(bites), s)
+            self.assertEqual(rp.unpackb(bites), s)
 
         s = "🐀📦 is great!"
-        bites = rp.encode(s)
+        bites = rp.packb(s)
         self.assertEqual(len(bites), len(s.encode("utf8")) + 1)
-        self.assertEqual(rp.decode(bites), s)
+        self.assertEqual(rp.unpackb(bites), s)
 
         s = "x" * 37
-        bites = rp.encode(s)
+        bites = rp.packb(s)
         self.assertEqual(len(bites), len(s) + 2)
-        self.assertEqual(rp.decode(bites), s)
+        self.assertEqual(rp.unpackb(bites), s)
 
     def test_array(self) -> None:
         for i in range(0, 37):
             # None encodes as a single byte
             arr = [None] * i
-            bites = rp.encode(arr)
+            bites = rp.packb(arr)
             self.assertEqual(len(bites), i + 1)
-            self.assertEqual(rp.decode(bites), arr)
+            self.assertEqual(rp.unpackb(bites), arr)
 
         arr = [None] * 37
-        bites = rp.encode(arr)
+        bites = rp.packb(arr)
         self.assertEqual(len(bites), len(arr) + 2)
-        self.assertEqual(rp.decode(bites), arr)
+        self.assertEqual(rp.unpackb(bites), arr)
 
     def test_map(self) -> None:
         for i in range(0, 37):
             d = {i: None for i in range(i)}
-            bites = rp.encode(d)
+            bites = rp.packb(d)
 
             # each key is 1 byte (small int) and each None is 1 byte
             self.assertEqual(len(bites), i * 2 + 1)
-            self.assertEqual(rp.decode(bites), d)
+            self.assertEqual(rp.unpackb(bites), d)
 
         d = {i: None for i in range(37)}
-        bites = rp.encode(d)
+        bites = rp.packb(d)
         self.assertEqual(len(bites), 37 * 2 + 2, bites.hex(" "))
-        self.assertEqual(rp.decode(bites), d)
+        self.assertEqual(rp.unpackb(bites), d)
 
     def test_map_deterministic_ordering(self) -> None:
         n_keys = rand.randint(18, 72)
@@ -184,32 +184,32 @@ class TypesTestCase(unittest.TestCase):
         d2: dict = {k: None for k in keys}
         d2[nested_key] = {k: None for k in nested_keys}
 
-        d1_enc = rp.encode(d1)
-        d2_enc = rp.encode(d2)
+        d1_enc = rp.packb(d1)
+        d2_enc = rp.packb(d2)
         self.assertEqual(d1_enc, d2_enc)
-        self.assertEqual(rp.decode(d1_enc), d1)
-        self.assertEqual(rp.decode(d2_enc), d1)
+        self.assertEqual(rp.unpackb(d1_enc), d1)
+        self.assertEqual(rp.unpackb(d2_enc), d1)
 
     def test_float(self) -> None:
         for i in [math.nan, math.inf, -math.inf, 0.0, 0.5, 2.0]:
-            bites = rp.encode(i)
+            bites = rp.packb(i)
             self.assertEqual(len(bites), 5)
 
             if math.isnan(i):
-                self.assertTrue(math.isnan(rp.decode(bites)))
+                self.assertTrue(math.isnan(rp.unpackb(bites)))
             else:
-                self.assertEqual(rp.decode(bites), i)
+                self.assertEqual(rp.unpackb(bites), i)
 
         for i in [math.pi, math.tau, math.e]:
-            bites = rp.encode(i)
+            bites = rp.packb(i)
             self.assertEqual(len(bites), 9)
-            self.assertEqual(rp.decode(bites), i)
+            self.assertEqual(rp.unpackb(bites), i)
 
     def test_bool_none(self) -> None:
         for i in [True, False, None]:
-            bites = rp.encode(i)
+            bites = rp.packb(i)
             self.assertEqual(len(bites), 1)
-            self.assertEqual(rp.decode(bites), i)
+            self.assertEqual(rp.unpackb(bites), i)
 
     def test_tag(self) -> None:
         now = datetime.now()
@@ -217,21 +217,21 @@ class TypesTestCase(unittest.TestCase):
 
         for i in range(8):
             with self.assertRaises(rp.RatPackException):
-                rp.encode(now, tags=[DatetimeTag(id=i)])
+                rp.packb(now, tags=[DatetimeTag(id=i)])
 
         for i in range(8, 16):
             dt_tag = DatetimeTag(id=i)
-            bites = rp.encode(now, tags=[dt_tag])
+            bites = rp.packb(now, tags=[dt_tag])
             # 2 = 1 small tag byte, 1 small str byte
             self.assertEqual(len(bites), len(now_iso) + 2)
-            data = rp.decode(bites, tags=[dt_tag])
+            data = rp.unpackb(bites, tags=[dt_tag])
             self.assertEqual(data, now)
 
         dt_tag = DatetimeTag(id=17)
-        bites = rp.encode(now, tags=[dt_tag])
+        bites = rp.packb(now, tags=[dt_tag])
         # 3 = 2 var tag byte, 1 small str byte
         self.assertEqual(len(bites), len(now_iso) + 3)
-        data = rp.decode(bites, tags=[dt_tag])
+        data = rp.unpackb(bites, tags=[dt_tag])
         self.assertEqual(data, now)
 
     def test_tag_compound_type(self) -> None:
@@ -243,8 +243,8 @@ class TypesTestCase(unittest.TestCase):
         )
 
         rgb = {"red", "green", "blue"}
-        bites = rp.encode(rgb, tags=[set_tag])
-        data = rp.decode(bites, tags=[set_tag])
+        bites = rp.packb(rgb, tags=[set_tag])
+        data = rp.unpackb(bites, tags=[set_tag])
         self.assertEqual(data, rgb)
 
 
@@ -284,15 +284,15 @@ class BenchMarkTestCase(unittest.TestCase):
     def _benchmark(self, bench: dict) -> None:
         with open(bench["file"]) as f:
             data = json.load(f)
-            timer = timeit.Timer("rp.encode(data)", globals={"rp": rp, "data": data})
+            timer = timeit.Timer("rp.packb(data)", globals={"rp": rp, "data": data})
             enc_time = timer.repeat(repeat=3, number=10)
-            enc_data = rp.encode(data)
+            enc_data = rp.packb(data)
 
             timer = timeit.Timer(
-                "rp.decode(enc_data)", globals={"rp": rp, "enc_data": enc_data}
+                "rp.unpackb(enc_data)", globals={"rp": rp, "enc_data": enc_data}
             )
             dec_time = timer.repeat(repeat=3, number=10)
-            dec_data = rp.decode(enc_data)
+            dec_data = rp.unpackb(enc_data)
 
             print(f"{bench['file']}")
             print(f"\tsize: {len(enc_data)} bytes")
