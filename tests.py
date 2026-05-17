@@ -275,19 +275,25 @@ class BenchMarkTestCase(unittest.TestCase):
                 "size": 1055469,
                 # time of 10 iterations
                 "enc_time": 0.708890,
-                "dec_time": 1.085396,
+                "dec_time": 0.525639,
             },
             {
                 "file": "data/citm_catalog.json",
                 "size": 342109,
                 "enc_time": 0.276842,
-                "dec_time": 0.507923,
+                "dec_time": 0.268711,
             },
             {
                 "file": "data/twitter.json",
                 "size": 401002,
                 "enc_time": 0.125645,
-                "dec_time": 0.233254,
+                "dec_time": 0.123794,
+            },
+            {
+                "file": "data/sample.json",
+                "size": 147291,
+                "enc_time": 0.025044,
+                "dec_time": 0.028300,
             },
         ]
         return super().setUpClass()

@@ -495,39 +495,29 @@ class Decoder:
             raise RatPackDecodingException("small str encoded as str var")
         return self.stream.read(size).decode("utf8")
 
-    @register(ARR_SMALL_NUM_START, ARR_SMALL_NUM_END)
-    def _decode_small_arr(self, marker: int) -> list:
-        size = marker - ARR_SMALL_NUM_START
-        ctx = [None] * size
-        for i in range(size):
-            ctx[i] = self._visit()
-        return ctx
-
-    @register(ARR_VAR)
-    def _decode_arr_var(self, _: int) -> list:
-        size = leb128_dec(self.stream)
-        if size < ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
-            raise RatPackDecodingException("small array encoded as array var")
+    @register(ARR_SMALL_NUM_START, ARR_VAR)
+    def _decode_arr(self, marker: int) -> list:
+        if marker == ARR_VAR:
+            size = leb128_dec(self.stream)
+            if size < ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
+                raise RatPackDecodingException("small array encoded as array var")
+        else:
+            size = marker - ARR_SMALL_NUM_START
 
         ctx = [None] * size
         for i in range(size):
             ctx[i] = self._visit()
         return ctx
 
-    @register(MAP_SMALL_NUM_START, MAP_SMALL_NUM_END)
-    def _decode_small_map(self, marker: int) -> dict:
-        size = marker - MAP_SMALL_NUM_START
-        return self._decode_map_items(size)
+    @register(MAP_SMALL_NUM_START, MAP_VAR)
+    def _decode_map(self, marker: int) -> dict:
+        if marker == MAP_VAR:
+            size = leb128_dec(self.stream)
+            if size < MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
+                raise RatPackDecodingException("small map encoded as map var")
+        else:
+            size = marker - MAP_SMALL_NUM_START
 
-    @register(MAP_VAR)
-    def _decode_map_var(self, _: int) -> dict:
-        size = leb128_dec(self.stream)
-        if size < MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
-            raise RatPackDecodingException("small map encoded as map var")
-
-        return self._decode_map_items(size)
-
-    def _decode_map_items(self, size: int) -> dict:
         ctx = {}
         last_item = None
 
