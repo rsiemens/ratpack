@@ -5,6 +5,7 @@ Ratpack is a relatively simple and efficent schemaless binary serialization form
 from __future__ import annotations
 
 import io
+import math
 import struct
 from collections.abc import Buffer
 from typing import Any, Callable, Generic, Protocol, TypeAlias, TypeVar, Union
@@ -234,8 +235,8 @@ class Encoder:
 
     def _encode_negative_int(self, i: int) -> None:
         i = -i
-        if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START:
-            self.stream.write(_BYTES_TABLE[NEG_INT_SMALL_START + i])
+        if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START + 1:
+            self.stream.write(_BYTES_TABLE[NEG_INT_SMALL_START + i - 1])
         else:
             self.stream.write(_BYTES_TABLE[NEG_INT_VAR])
             leb128_enc(i, self.stream)
@@ -299,7 +300,7 @@ class Encoder:
     def _encode_float(self, f: float) -> None:
         f32packed = _f32pack(f)
 
-        if _f32unpack(f32packed)[0] == f:
+        if math.isnan(f) or _f32unpack(f32packed)[0] == f:
             self.stream.write(_BYTES_TABLE[FLOAT32])
             self.stream.write(f32packed)
         else:
@@ -402,18 +403,18 @@ class Decoder:
 
     @register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
     def _decode_small_neg_int(self, marker: int) -> int:
-        return -(marker - NEG_INT_SMALL_START)
+        return -(marker - NEG_INT_SMALL_START + 1)
 
     @register(NEG_INT_VAR)
     def _decode_neg_int_var(self, _: int) -> int:
         n = leb128_dec(self.stream)
-        if n < NEG_INT_SMALL_END - NEG_INT_SMALL_START:
+        if n < NEG_INT_SMALL_END - NEG_INT_SMALL_START + 1:
             raise RatPackDecodingException(
                 "small negative int encoded as negative var int"
             )
         return -n
 
-    @register(BIN_SMALL_START, BIN_SMALL_START)
+    @register(BIN_SMALL_START, BIN_SMALL_END)
     def _decode_small_bin(self, marker: int) -> bytes:
         size = marker - BIN_SMALL_START
         return self.stream.read(size)

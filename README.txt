@@ -13,25 +13,26 @@ Ratpack splits it's types across a one byte number range (0-255) and assigns typ
 ranges. For example small strings cover 0x76 - 0x9A while variable length strings are assigned 0x9B.
 
 The full set of types and there ranges are as follows:
-    - unsigned small int: 0x00-0x40
-    - unsigned var int 0x41
-    - negative small int 0x42-0x62
-    - negative var int 0x63
-    - small byte str 0x64-0x74
-    - var len byte str 0x75
-    - small utf8 enc str 0x76-0x9A
-    - var len utf8 enc str 0x9B
-    - small array 0x9C-0xC0
-    - var len array 0xC1-0xC2
-    - small map 0xC2-0xE6
-    - var len map 0xE7
+
+    - unsigned small int 0x00-0x40 (unsigned ints 0 to 64)
+    - unsigned var int 0x41 (unsigned ints > 64)
+    - negative small int 0x42-0x62 (neg ints -1 to -33)
+    - negative var int 0x63 (neg ints < -33)
+    - small len binary 0x64-0x74 (lengths 0 to 16)
+    - var len binary 0x75 (lengths > 16)
+    - small utf8 enc str 0x76-0x9A (lengths 0 to 36)
+    - var len utf8 enc str 0x9B (lengths > 36)
+    - small array 0x9C-0xC0 (lengths 0 to 36)
+    - var len array 0xC1-0xC2 (lengths > 36)
+    - small map 0xC2-0xE6 (lengths 0 to 36)
+    - var len map 0xE7 (lengths > 36)
     - IEEE 754 float32 0xE8
     - IEEE 754 float64 0xE9
     - true 0xEA
     - false 0xEB
     - null 0xEC
-    - small tag 0xED-0xFD
-    - var tag 0xFE
+    - small tag 0xED-0xFD (tag ids 0 to 16)
+    - var tag 0xFE (tag ids > 16)
     - start of file signature magic number 0xFF (more on this further down)
 
 Variable size ints and length are implemented using unsigned LEB128[2] encoding which allows storing
