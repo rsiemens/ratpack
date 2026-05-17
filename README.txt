@@ -26,8 +26,8 @@ The full set of types and there ranges are as follows:
     - var len array 0xC1-0xC2 (lengths > 36)
     - small map 0xC2-0xE6 (lengths 0 to 36)
     - var len map 0xE7 (lengths > 36)
-    - IEEE 754 float32 0xE8
-    - IEEE 754 float64 0xE9
+    - little-endian IEEE 754 single precision 0xE8
+    - little-endian IEEE 754 double precision 0xE9
     - true 0xEA
     - false 0xEB
     - null 0xEC
@@ -45,7 +45,9 @@ precision.
 
 Map keys must be sorted from smallest to largest based on their encoded lexigraphical order.
 
-Tags [todo]
+Tags work the same way in ratpack as they do in cbor. The tag number wraps the single data item that
+follows after the tag. Tag numbers 0-8 are reserved for the specification to define. All other tag
+numbers are free for user/implementation to define.
 
 The file signature magic number start (0xFF) is only valid at the very begining of a ratpack encoded
 document or stream. It is optional, but if it is included, it must be immediately followed by three

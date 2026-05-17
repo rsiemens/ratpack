@@ -88,11 +88,11 @@ TAG_RESERVED = {i for i in range(8)}
 MAGIC_NUMBER_START = 0xFF
 MAGIC_NUMER_SIG = b"rp\x00"
 
-_u8pack = struct.Struct(">B").pack
-_f32pack = struct.Struct(">f").pack
-_f32unpack = struct.Struct(">f").unpack
-_f64pack = struct.Struct(">d").pack
-_f64unpack = struct.Struct(">d").unpack
+_u8pack = struct.Struct("B").pack
+_f32pack = struct.Struct("<f").pack
+_f32unpack = struct.Struct("<f").unpack
+_f64pack = struct.Struct("<d").pack
+_f64unpack = struct.Struct("<d").unpack
 
 _BYTES_TABLE = [_u8pack(i) for i in range(0xFF + 1)]
 
