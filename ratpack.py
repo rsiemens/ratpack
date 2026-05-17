@@ -405,20 +405,11 @@ class ItemWrappedStream:
         self.item.write(bites)
         return bites
 
-    def reset_item(self) -> None:
-        self.item.truncate()
-
-    def get_and_reset_item(self) -> bytes:
-        item = self.item.getvalue()
-        self.item.truncate()
-        return item
-
 
 class Decoder:
     def __init__(self, stream: BinaryReader, tags: list[Tag] | None = None):
         self.stream = stream
         self.tags: dict[int, Tag] = {}
-        self._first_visit = True
 
         if tags is not None:
             for tag in tags:
@@ -429,18 +420,19 @@ class Decoder:
                 self.tags[tag.id] = tag
 
     def decode(self) -> Any:
-        return self._visit()
+        return self._visit_first()
+
+    def _visit_first(self) -> Any:
+        marker = self.stream.read(1)[0]
+        if marker == MAGIC_NUMBER_START:
+            sig = self.stream.read(3)
+            if sig != MAGIC_NUMER_SIG:
+                raise RatPackDecodingException("invalid file signature")
+            return self._visit()
+        return _DECODE_TABLE[marker](self, marker)
 
     def _visit(self) -> Any:
         marker = self.stream.read(1)[0]
-        if self._first_visit:
-            self._first_visit = False
-            if marker == MAGIC_NUMBER_START:
-                sig = self.stream.read(3)
-                if sig != MAGIC_NUMER_SIG:
-                    raise RatPackDecodingException("invalid file signature")
-                return self._visit()
-
         return _DECODE_TABLE[marker](self, marker)
 
     @register(UINT_SMALL_START, UINT_SMALL_END)
@@ -537,22 +529,20 @@ class Decoder:
 
     def _decode_map_items(self, size: int) -> dict:
         ctx = {}
-        self.stream = ItemWrappedStream(self.stream)
         last_item = None
 
         for _ in range(size):
+            self.stream = ItemWrappedStream(self.stream)
             k = self._visit()
-
-            item = self.stream.get_and_reset_item()
+            item = self.stream.item.getvalue()
             # transitivity ensures all keys are lexigraphicaly orderd smallest to largest
             if last_item is not None and item < last_item:
                 raise RatPackDecodingException("map keys are out of order")
             last_item = item
+            self.stream = self.stream.stream
 
             ctx[k] = self._visit()
-            self.stream.reset_item()
 
-        self.stream = self.stream.stream
         return ctx
 
     @register(FLOAT32)
