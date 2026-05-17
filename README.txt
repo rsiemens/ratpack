@@ -10,22 +10,28 @@ Some notable features:
     - Simple extension type via tags.
 
 Ratpack splits it's types across a one byte number range (0-255) and assigns types to different
-ranges. For example small strings cover 0x76 - 0x9A while variable length strings are assigned 0x9B.
+ranges. For example small strings cover 0x7E - 0xA2 while variable length strings are assigned 0xA3.
 
 The full set of types and there ranges are as follows:
 
     - unsigned small int 0x00-0x40 (unsigned ints 0 to 64)
-    - unsigned var int 0x41 (unsigned ints > 64)
-    - negative small int 0x42-0x62 (neg ints -1 to -33)
-    - negative var int 0x63 (neg ints < -33)
-    - small len binary 0x64-0x74 (lengths 0 to 16)
-    - var len binary 0x75 (lengths > 16)
-    - small utf8 enc str 0x76-0x9A (lengths 0 to 36)
-    - var len utf8 enc str 0x9B (lengths > 36)
-    - small array 0x9C-0xC0 (lengths 0 to 36)
-    - var len array 0xC1-0xC2 (lengths > 36)
-    - small map 0xC2-0xE6 (lengths 0 to 36)
-    - var len map 0xE7 (lengths > 36)
+    - unsigned int8 0x41 (unsigned ints 64 to 255)
+    - litte-endian unsigned int16 0x42 (unsigned ints 256 to 2**16-1)
+    - litte-endian unsigned int32 0x43 (unsigned ints 2**16 to 2**32-1)
+    - litte-endian unsigned int64 0x44 (unsigned ints 2**32 to 2**64-1)
+    - negative small int 0x45-0x67 (neg ints -1 to -35)
+    - negative int8 0x68 (neg ints -36 to -255)
+    - litte-endian negative int16 0x69 (neg ints -256 to -(2**16-1))
+    - litte-endian negative int32 0x6A (neg ints -2**16 to -(2**32-1))
+    - litte-endian negative int64 0x6B (neg ints -2**32 to -(2**64-1))
+    - small len binary 0x6C-0x7C (lengths 0 to 16)
+    - var len binary 0x7D (lengths > 16)
+    - small utf8 enc str 0x7E-0xA2 (lengths 0 to 36)
+    - var len utf8 enc str 0xA3 (lengths > 36)
+    - small array 0xA4-0xC4 (lengths 0 to 32)
+    - var len array 0xC5 (lengths > 32)
+    - small map 0xC6-0xE6 (lengths 0 to 32)
+    - var len map 0xE7 (lengths > 32)
     - little-endian IEEE 754 single precision 0xE8
     - little-endian IEEE 754 double precision 0xE9
     - true 0xEA
@@ -38,10 +44,10 @@ The full set of types and there ranges are as follows:
 Variable size ints and length are implemented using unsigned LEB128[2] encoding which allows storing
 arbitrary length ints and sizes.
 
-Encoders should always use the smallest reprsentable type that can store that value. This means a
-strongly typed language should always use a unsigned small int to store a int32 of value 8. For
-floats a simple cast can be performed to see if a f64 can be encoded as a f32 without loss of
-precision.
+In order to maintain deterministic map ordering, encoders should always use the smallest
+reprsentable type that can store that value. This means a strongly typed language should always use
+a unsigned small int to store a int32 of value 8. For floats a simple cast can be performed to see
+if a f64 can be encoded as a f32 without loss of precision.
 
 Map keys must be sorted from smallest to largest based on their encoded lexigraphical order.
 

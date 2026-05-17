@@ -104,15 +104,31 @@ class TypesTestCase(unittest.TestCase):
         self.assertEqual(len(bites), 2)
         self.assertEqual(rp.unpackb(bites), 65)
 
+        for i, size in [(2**8 - 1, 1), (2**16 - 1, 2), (2**32 - 1, 4), (2**64 - 1, 8)]:
+            bites = rp.packb(i)
+            self.assertEqual(len(bites), size + 1)
+            self.assertEqual(rp.unpackb(bites), i)
+
+        with self.assertRaises(rp.RatPackEncodingException):
+            rp.packb(2**64)
+
     def test_negint(self) -> None:
-        for i in range(1, 34):
+        for i in range(1, 36):
             bites = rp.packb(-i)
             self.assertEqual(len(bites), 1)
             self.assertEqual(rp.unpackb(bites), -i)
 
-        bites = rp.packb(-34)
+        bites = rp.packb(-36)
         self.assertEqual(len(bites), 2)
-        self.assertEqual(rp.unpackb(bites), -34)
+        self.assertEqual(rp.unpackb(bites), -36)
+
+        for i, size in [(2**8 - 1, 1), (2**16 - 1, 2), (2**32 - 1, 4), (2**64 - 1, 8)]:
+            bites = rp.packb(-i)
+            self.assertEqual(len(bites), size + 1)
+            self.assertEqual(rp.unpackb(bites), -i)
+
+        with self.assertRaises(rp.RatPackEncodingException):
+            rp.packb(-(2**64))
 
     def test_binary(self) -> None:
         for i in range(0, 17):
@@ -144,20 +160,20 @@ class TypesTestCase(unittest.TestCase):
         self.assertEqual(rp.unpackb(bites), s)
 
     def test_array(self) -> None:
-        for i in range(0, 37):
+        for i in range(0, 33):
             # None encodes as a single byte
             arr = [None] * i
             bites = rp.packb(arr)
             self.assertEqual(len(bites), i + 1)
             self.assertEqual(rp.unpackb(bites), arr)
 
-        arr = [None] * 37
+        arr = [None] * 33
         bites = rp.packb(arr)
         self.assertEqual(len(bites), len(arr) + 2)
         self.assertEqual(rp.unpackb(bites), arr)
 
     def test_map(self) -> None:
-        for i in range(0, 37):
+        for i in range(0, 33):
             d = {i: None for i in range(i)}
             bites = rp.packb(d)
 
@@ -165,9 +181,9 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), i * 2 + 1)
             self.assertEqual(rp.unpackb(bites), d)
 
-        d = {i: None for i in range(37)}
+        d = {i: None for i in range(33)}
         bites = rp.packb(d)
-        self.assertEqual(len(bites), 37 * 2 + 2, bites.hex(" "))
+        self.assertEqual(len(bites), 33 * 2 + 2, bites.hex(" "))
         self.assertEqual(rp.unpackb(bites), d)
 
     def test_map_deterministic_ordering(self) -> None:
@@ -256,20 +272,20 @@ class BenchMarkTestCase(unittest.TestCase):
         cls.benchmarks = [
             {
                 "file": "data/canada.json",
-                "size": 1055458,
+                "size": 1055469,
                 # time of 10 iterations
                 "enc_time": 0.708890,
                 "dec_time": 1.085396,
             },
             {
                 "file": "data/citm_catalog.json",
-                "size": 346063,
-                "enc_time": 0.321273,
-                "dec_time": 0.683307,
+                "size": 342109,
+                "enc_time": 0.276842,
+                "dec_time": 0.507923,
             },
             {
                 "file": "data/twitter.json",
-                "size": 401637,
+                "size": 401002,
                 "enc_time": 0.125645,
                 "dec_time": 0.233254,
             },

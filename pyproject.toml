@@ -20,7 +20,7 @@ cython = "^3.2.4"
 
 [tool.ruff.lint]
 select = ["PL", "I"]
-ignore = ["PLR0913"]
+ignore = ["PLR0913", "PLR2004"]
 
 [tool.mypy]
 disallow_untyped_calls = true

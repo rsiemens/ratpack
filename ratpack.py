@@ -48,25 +48,31 @@ class RatPackDecodingException(RatPackException):
 
 UINT_SMALL_START = 0x00
 UINT_SMALL_END = 0x40
-UINT_VAR = 0x41
+UINT8 = 0x41
+UINT16 = 0x42
+UINT32 = 0x43
+UINT64 = 0x44
 
-NEG_INT_SMALL_START = 0x42
-NEG_INT_SMALL_END = 0x62
-NEG_INT_VAR = 0x63
+NEG_INT_SMALL_START = 0x45
+NEG_INT_SMALL_END = 0x67
+NEG_INT8 = 0x68
+NEG_INT16 = 0x69
+NEG_INT32 = 0x6A
+NEG_INT64 = 0x6B
 
-BIN_SMALL_START = 0x64
-BIN_SMALL_END = 0x74
-BIN_VAR = 0x75
+BIN_SMALL_START = 0x6C
+BIN_SMALL_END = 0x7C
+BIN_VAR = 0x7D
 
-STR_SMALL_NUM_START = 0x76
-STR_SMALL_NUM_END = 0x9A
-STR_VAR = 0x9B
+STR_SMALL_NUM_START = 0x7E
+STR_SMALL_NUM_END = 0xA2
+STR_VAR = 0xA3
 
-ARR_SMALL_NUM_START = 0x9C
-ARR_SMALL_NUM_END = 0xC0
-ARR_VAR = 0xC1
+ARR_SMALL_NUM_START = 0xA4
+ARR_SMALL_NUM_END = 0xC4
+ARR_VAR = 0xC5
 
-MAP_SMALL_NUM_START = 0xC2
+MAP_SMALL_NUM_START = 0xC6
 MAP_SMALL_NUM_END = 0xE6
 MAP_VAR = 0xE7
 
@@ -88,13 +94,12 @@ TAG_RESERVED = {i for i in range(8)}
 MAGIC_NUMBER_START = 0xFF
 MAGIC_NUMER_SIG = b"rp\x00"
 
-_u8pack = struct.Struct("B").pack
-_f32pack = struct.Struct("<f").pack
-_f32unpack = struct.Struct("<f").unpack
-_f64pack = struct.Struct("<d").pack
-_f64unpack = struct.Struct("<d").unpack
-
-_BYTES_TABLE = [_u8pack(i) for i in range(0xFF + 1)]
+_u16 = struct.Struct("<H")
+_u32 = struct.Struct("<I")
+_u64 = struct.Struct("<Q")
+_f32 = struct.Struct("<f")
+_f64 = struct.Struct("<d")
+_BYTES_TABLE = [bytes([i]) for i in range(0xFF + 1)]
 
 
 def leb128_enc(n: int, writer: BinaryWriter) -> None:
@@ -251,17 +256,43 @@ class Encoder:
     def _encode_positive_int(self, i: int) -> None:
         if i <= UINT_SMALL_END - UINT_SMALL_START:
             self.stream.write(_BYTES_TABLE[UINT_SMALL_START + i])
+        elif i <= 0xFF:
+            self.stream.write(_BYTES_TABLE[UINT8])
+            self.stream.write(_BYTES_TABLE[i])
+        elif i <= 0xFFFF:
+            self.stream.write(_BYTES_TABLE[UINT16])
+            self.stream.write(_u16.pack(i))
+        elif i <= 0xFFFFFFFF:
+            self.stream.write(_BYTES_TABLE[UINT32])
+            self.stream.write(_u32.pack(i))
+        elif i <= 0xFFFFFFFFFFFFFFFF:
+            self.stream.write(_BYTES_TABLE[UINT64])
+            self.stream.write(_u64.pack(i))
         else:
-            self.stream.write(_BYTES_TABLE[UINT_VAR])
-            leb128_enc(i, self.stream)
+            raise RatPackEncodingException(
+                "unable to encode numbers larger than 2**64-1"
+            )
 
     def _encode_negative_int(self, i: int) -> None:
         i = -i
         if i <= NEG_INT_SMALL_END - NEG_INT_SMALL_START + 1:
             self.stream.write(_BYTES_TABLE[NEG_INT_SMALL_START + i - 1])
+        elif i <= 0xFF:
+            self.stream.write(_BYTES_TABLE[NEG_INT8])
+            self.stream.write(_BYTES_TABLE[i])
+        elif i <= 0xFFFF:
+            self.stream.write(_BYTES_TABLE[NEG_INT16])
+            self.stream.write(_u16.pack(i))
+        elif i <= 0xFFFFFFFF:
+            self.stream.write(_BYTES_TABLE[NEG_INT32])
+            self.stream.write(_u32.pack(i))
+        elif i <= 0xFFFFFFFFFFFFFFFF:
+            self.stream.write(_BYTES_TABLE[NEG_INT64])
+            self.stream.write(_u64.pack(i))
         else:
-            self.stream.write(_BYTES_TABLE[NEG_INT_VAR])
-            leb128_enc(i, self.stream)
+            raise RatPackEncodingException(
+                "unable to encode numbers smaller than -(2**64-1)"
+            )
 
     def _encode_bytes(self, b: bytes) -> None:
         size = len(b)
@@ -320,14 +351,14 @@ class Encoder:
             self._encode(v)
 
     def _encode_float(self, f: float) -> None:
-        f32packed = _f32pack(f)
+        f32packed = _f32.pack(f)
 
-        if math.isnan(f) or _f32unpack(f32packed)[0] == f:
+        if math.isnan(f) or _f32.unpack(f32packed)[0] == f:
             self.stream.write(_BYTES_TABLE[FLOAT32])
             self.stream.write(f32packed)
         else:
             self.stream.write(_BYTES_TABLE[FLOAT64])
-            self.stream.write(_f64pack(f))
+            self.stream.write(_f64.pack(f))
 
     def _encode_tag(self, tag: Tag, obj: RatType) -> None:
         rat_obj = tag.encode(obj)
@@ -416,25 +447,37 @@ class Decoder:
     def _decode_small_uint(self, marker: int) -> int:
         return marker
 
-    @register(UINT_VAR)
-    def _decode_uint_var(self, _: int) -> int:
-        n = leb128_dec(self.stream)
-        if n < UINT_SMALL_END - UINT_SMALL_START:
-            raise RatPackDecodingException("small unsigned int encoded as var int")
-        return n
+    @register(UINT8, UINT64)
+    def _decode_fixed_uint(self, marker: int) -> int:
+        if marker == UINT8:
+            return self.stream.read(1)[0]
+        if marker == UINT16:
+            return _u16.unpack(self.stream.read(2))[0]
+        if marker == UINT32:
+            return _u32.unpack(self.stream.read(4))[0]
+        if marker == UINT64:
+            return _u64.unpack(self.stream.read(8))[0]
+        # should be unreachable
+        raise RatPackDecodingException(f"unable to deocde fixed size int ({marker})")
 
     @register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
     def _decode_small_neg_int(self, marker: int) -> int:
         return -(marker - NEG_INT_SMALL_START + 1)
 
-    @register(NEG_INT_VAR)
-    def _decode_neg_int_var(self, _: int) -> int:
-        n = leb128_dec(self.stream)
-        if n < NEG_INT_SMALL_END - NEG_INT_SMALL_START + 1:
-            raise RatPackDecodingException(
-                "small negative int encoded as negative var int"
-            )
-        return -n
+    @register(NEG_INT8, NEG_INT64)
+    def _decode_fixed_neg_int(self, marker: int) -> int:
+        if marker == NEG_INT8:
+            return -self.stream.read(1)[0]
+        if marker == NEG_INT16:
+            return -_u16.unpack(self.stream.read(2))[0]
+        if marker == NEG_INT32:
+            return -_u32.unpack(self.stream.read(4))[0]
+        if marker == NEG_INT64:
+            return -_u64.unpack(self.stream.read(8))[0]
+        # should be unreachable
+        raise RatPackDecodingException(
+            f"unable to deocde fixed size neg int ({marker})"
+        )
 
     @register(BIN_SMALL_START, BIN_SMALL_END)
     def _decode_small_bin(self, marker: int) -> bytes:
@@ -514,13 +557,13 @@ class Decoder:
 
     @register(FLOAT32)
     def _decode_f32(self, _: int) -> float:
-        return _f32unpack(self.stream.read(4))[0]
+        return _f32.unpack(self.stream.read(4))[0]
 
     @register(FLOAT64)
     def _decode_f64(self, _: int) -> float:
-        f = _f64unpack(self.stream.read(8))[0]
+        f = _f64.unpack(self.stream.read(8))[0]
 
-        can_be_f32 = _f32unpack(_f32pack(f))[0] == f
+        can_be_f32 = _f32.unpack(_f32.pack(f))[0] == f
         if can_be_f32:
             raise RatPackDecodingException("f32 representable float encoded as f64")
 
