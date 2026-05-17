@@ -207,7 +207,7 @@ class TypesTestCase(unittest.TestCase):
         self.assertEqual(rp.unpackb(d2_enc), d1)
 
     def test_float(self) -> None:
-        for i in [math.nan, math.inf, -math.inf, 0.0, 0.5, 2.0]:
+        for i in [math.nan, math.inf, -math.inf, 0.0, 1.0, -1.0, 0.5, 2.0]:
             bites = rp.packb(i)
             self.assertEqual(len(bites), 5)
 
@@ -271,26 +271,26 @@ class BenchMarkTestCase(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.benchmarks = [
             {
-                "file": "data/canada.json",
+                "file": "benchmarks/data/canada.json",
                 "size": 1055469,
                 # time of 10 iterations
                 "enc_time": 0.708890,
                 "dec_time": 0.525639,
             },
             {
-                "file": "data/citm_catalog.json",
+                "file": "benchmarks/data/citm_catalog.json",
                 "size": 342109,
                 "enc_time": 0.276842,
                 "dec_time": 0.268711,
             },
             {
-                "file": "data/twitter.json",
+                "file": "benchmarks/data/twitter.json",
                 "size": 401002,
                 "enc_time": 0.125645,
                 "dec_time": 0.123794,
             },
             {
-                "file": "data/sample.json",
+                "file": "benchmarks/data/sample.json",
                 "size": 147291,
                 "enc_time": 0.025044,
                 "dec_time": 0.028300,

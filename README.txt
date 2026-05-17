@@ -62,6 +62,6 @@ bytes 0x72 0x70 and a version byte 0x00-0xFF. For the current verions (0x00) the
 look like b"\xffrp\x00".
 
 
-1: https://github.com/rsiemens/ratpack/blob/main/chart.png
+1: https://github.com/rsiemens/ratpack/blob/main/benchmarks/chart.png
 2: https://en.wikipedia.org/wiki/Content-addressable_storage
 3: https://en.wikipedia.org/wiki/LEB128

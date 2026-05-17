@@ -353,7 +353,7 @@ class Encoder:
     def _encode_float(self, f: float) -> None:
         f32packed = _f32.pack(f)
 
-        if math.isnan(f) or _f32.unpack(f32packed)[0] == f:
+        if _f32.unpack(f32packed)[0] == f or math.isnan(f):
             self.stream.write(_BYTES_TABLE[FLOAT32])
             self.stream.write(f32packed)
         else:
