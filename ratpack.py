@@ -4,9 +4,11 @@ Ratpack is a relatively simple and efficent schemaless binary serialization form
 
 from __future__ import annotations
 
+import datetime
 import io
 import math
 import struct
+import uuid
 from collections.abc import Buffer
 from typing import Any, Callable, Generic, Protocol, TypeAlias, TypeVar, Union
 
@@ -138,22 +140,56 @@ class Tag(Generic[T]):
         self,
         id: int,
         obj_type: type[T],
-        encoder: Callable[[T], RatType],
-        decoder: Callable[[RatType], T],
+        encode: Callable[[T], RatType] | None = None,
+        decode: Callable[[RatType], T] | None = None,
     ):
         self.id = id
         self.obj_type = obj_type
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoder = encode
+        self.decoder = decode
 
     def encode(self, obj: T) -> RatType:
+        if self.encoder is None:
+            raise RatPackEncodingException("encode not provided for {self}")
         return self.encoder(obj)
 
     def decode(self, item: RatType) -> T:
+        if self.decoder is None:
+            raise RatPackDecodingException("decode not provided for {self}")
         return self.decoder(item)
 
     def __repr__(self) -> str:
         return f"<Tag({self.id} {self.obj_type})>"
+
+
+class ISODateTimeTag(Tag):
+    def __init__(self) -> None:
+        super().__init__(id=0, obj_type=datetime.datetime)
+
+    def encode(self, obj: datetime.datetime) -> RatType:
+        return obj.isoformat()
+
+    def decode(self, item: RatType) -> datetime.datetime:
+        if not isinstance(item, str):
+            raise RatPackDecodingException(
+                f"expected str for datetime decoding, got {type(item)}"
+            )
+        return datetime.datetime.fromisoformat(item)
+
+
+class UUIDTag(Tag):
+    def __init__(self) -> None:
+        super().__init__(id=1, obj_type=uuid.UUID)
+
+    def encode(self, obj: uuid.UUID) -> RatType:
+        return obj.bytes
+
+    def decode(self, item: RatType) -> uuid.UUID:
+        if not isinstance(item, bytes):
+            raise RatPackDecodingException(
+                f"expected bytes for uuid decoding, got {type(item)}"
+            )
+        return uuid.UUID(bytes=item)
 
 
 def packb(
@@ -188,6 +224,9 @@ loads = unpackb
 dump = pack
 load = unpack
 
+_dt_tag = ISODateTimeTag()
+_uuid_tag = UUIDTag()
+
 
 class Encoder:
     def __init__(
@@ -197,7 +236,10 @@ class Encoder:
         include_header: bool = False,
     ):
         self.stream = stream
-        self.tags: dict[Any, Tag] = {}
+        self.tags: dict[Any, Tag] = {
+            _dt_tag.obj_type: _dt_tag,
+            _uuid_tag.obj_type: _uuid_tag,
+        }
         self.include_header = include_header
 
         if tags is not None:
@@ -409,7 +451,10 @@ class ItemWrappedStream:
 class Decoder:
     def __init__(self, stream: BinaryReader, tags: list[Tag] | None = None):
         self.stream = stream
-        self.tags: dict[int, Tag] = {}
+        self.tags: dict[int, Tag] = {
+            _dt_tag.id: _dt_tag,
+            _uuid_tag.id: _uuid_tag,
+        }
 
         if tags is not None:
             for tag in tags:

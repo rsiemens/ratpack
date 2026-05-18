@@ -5,7 +5,8 @@ import random as rand
 import string
 import timeit
 import unittest
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import cast
 
 import ratpack as rp
@@ -29,20 +30,6 @@ def randkeys(n_keys: int) -> list[str | bytes | int | float]:
             case 3:
                 keys.append(randstr())
     return keys
-
-
-class DatetimeTag(rp.Tag):
-    def __init__(self, id: int):
-        super().__init__(
-            id, obj_type=datetime, encoder=self.encode, decoder=self.decode
-        )
-
-    def encode(self, obj: datetime) -> rp.RatType:
-        return obj.isoformat()
-
-    def decode(self, item: rp.RatType) -> datetime:
-        assert isinstance(item, str)
-        return datetime.fromisoformat(item)
 
 
 class LEB128TestCase(unittest.TestCase):
@@ -227,35 +214,42 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), 1)
             self.assertEqual(rp.unpackb(bites), i)
 
-    def test_tag(self) -> None:
-        now = datetime.now()
-        now_iso = now.isoformat()
+    def test_built_in_tags(self) -> None:
+        today = datetime.now(tz=timezone.utc)
+        event_id = uuid.uuid4()
+        event = {"date": today, "id": event_id, "type": "some_event"}
+
+        bites = rp.packb(event)
+        self.assertEqual(len(bites), 77)
+        self.assertEqual(rp.unpackb(bites), event)
+
+    def test_custom_tag(self) -> None:
+        def tuple_tag(i: int) -> rp.Tag:
+            return rp.Tag(id=i, obj_type=tuple, encode=list, decode=tuple)  # type: ignore
 
         for i in range(8):
             with self.assertRaises(rp.RatPackException):
-                rp.packb(now, tags=[DatetimeTag(id=i)])
+                rp.packb((1, "two"), tags=[tuple_tag(i)])
 
         for i in range(8, 16):
-            dt_tag = DatetimeTag(id=i)
-            bites = rp.packb(now, tags=[dt_tag])
-            # 2 = 1 small tag byte, 1 small str byte
-            self.assertEqual(len(bites), len(now_iso) + 2)
-            data = rp.unpackb(bites, tags=[dt_tag])
-            self.assertEqual(data, now)
+            bites = rp.packb((1, "two"), tags=[tuple_tag(i)])
+            # 7 = 1 small tag byte + 1 small array + 1 small int + 1 small str byte + 3 str content
+            self.assertEqual(len(bites), 7)
+            data = rp.unpackb(bites, tags=[tuple_tag(i)])
+            self.assertEqual(data, (1, "two"))
 
-        dt_tag = DatetimeTag(id=17)
-        bites = rp.packb(now, tags=[dt_tag])
-        # 3 = 2 var tag byte, 1 small str byte
-        self.assertEqual(len(bites), len(now_iso) + 3)
-        data = rp.unpackb(bites, tags=[dt_tag])
-        self.assertEqual(data, now)
+        bites = rp.packb((1, "two"), tags=[tuple_tag(17)])
+        # 8 = same as above, but an extra byte for the var tag
+        self.assertEqual(len(bites), 8)
+        data = rp.unpackb(bites, tags=[tuple_tag(17)])
+        self.assertEqual(data, (1, "two"))
 
     def test_tag_compound_type(self) -> None:
         set_tag = rp.Tag(
             id=2026,
             obj_type=set,
-            encoder=lambda s: list(s),  # noqa: PLW0108
-            decoder=lambda l: set(cast(list, l)),
+            encode=lambda s: list(s),  # noqa: PLW0108
+            decode=lambda l: set(cast(list, l)),
         )
 
         rgb = {"red", "green", "blue"}

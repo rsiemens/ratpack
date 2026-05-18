@@ -54,7 +54,10 @@ Map keys must be sorted from smallest to largest based on their encoded lexigrap
 
 Tags work the same way in ratpack as they do in cbor. The tag number wraps the single data item that
 follows after the tag. Tag numbers 0-8 are reserved for the specification to define. All other tag
-numbers are free for user/implementation to define.
+numbers are free for user/implementation to define. The following are the current defined tags:
+
+Tag 0: ISO 8601 Date Time string.
+Tag 1: UUID in 16 byte binary representation
 
 The file signature magic number start (0xFF) is only valid at the very begining of a ratpack encoded
 document or stream. It is optional, but if it is included, it must be immediately followed by three
