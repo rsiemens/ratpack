@@ -32,14 +32,14 @@ def randkeys(n_keys: int) -> list[str | bytes | int | float]:
     return keys
 
 
-class LEB128TestCase(unittest.TestCase):
-    def test_leb128_enc_dec(self) -> None:
+class VLQTestCase(unittest.TestCase):
+    def test_vql_enc_dec(self) -> None:
         for i in range(128):
             buff = io.BytesIO()
-            rp.leb128_enc(i, buff)
+            rp.vlq_enc(i, buff)
 
             buff.seek(0)
-            n = rp.leb128_dec(buff)
+            n = rp.vlq_dec(buff)
             self.assertEqual(n, i)
 
         test_cases = [
@@ -56,10 +56,10 @@ class LEB128TestCase(unittest.TestCase):
         ]
         for i in test_cases:
             buff = io.BytesIO()
-            rp.leb128_enc(i, buff)
+            rp.vlq_enc(i, buff)
 
             buff.seek(0)
-            n = rp.leb128_dec(buff)
+            n = rp.vlq_dec(buff)
             self.assertEqual(n, i)
 
 
@@ -286,7 +286,7 @@ class BenchMarkTestCase(unittest.TestCase):
             {
                 "file": "benchmarks/data/sample.json",
                 "size": 147291,
-                "enc_time": 0.025044,
+                "enc_time": 0.027673,
                 "dec_time": 0.028300,
             },
         ]

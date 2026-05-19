@@ -96,37 +96,35 @@ TAG_RESERVED = {i for i in range(8)}
 MAGIC_NUMBER_START = 0xFF
 MAGIC_NUMER_SIG = b"rp\x00"
 
-_u16 = struct.Struct("<H")
-_u32 = struct.Struct("<I")
-_u64 = struct.Struct("<Q")
-_f32 = struct.Struct("<f")
-_f64 = struct.Struct("<d")
+_u16 = struct.Struct(">H")
+_u32 = struct.Struct(">I")
+_u64 = struct.Struct(">Q")
+_f32 = struct.Struct(">f")
+_f64 = struct.Struct(">d")
 _BYTES_TABLE = [bytes([i]) for i in range(0xFF + 1)]
 
 
-def leb128_enc(n: int, writer: BinaryWriter) -> None:
-    """Little endian base 128 https://en.wikipedia.org/wiki/LEB128"""
-    byte = n & 0x7F  # mask the lower 7 bits leaving the msb as 0
+def vlq_enc(n: int, writer: BinaryWriter) -> None:
+    """Variable-length quantity https://en.wikipedia.org/wiki/Variable-length_quantity"""
+    bites = bytearray([n & 0x7F])  # mask the lower 7 bits leaving the msb as 0
     n >>= 7
+
     while n:
-        writer.write(_BYTES_TABLE[byte | 0x80])
-        byte = n & 0x7F
+        bites.append((n & 0x7F) | 0x80)
         n >>= 7
-    writer.write(_BYTES_TABLE[byte])
+    writer.write(bites[::-1])
 
 
-def leb128_dec(reader: BinaryReader) -> int:
+def vlq_dec(reader: BinaryReader) -> int:
     n = 0
-    shift = 0
 
     while True:
         try:
             byte = reader.read(1)[0]
         except IndexError:
-            raise RatPackDecodingException("Malformed leb128 encoded payload")
+            raise RatPackDecodingException("Malformed vlq encoded payload")
 
-        n |= (byte & 0x7F) << shift
-        shift += 7
+        n = (n << 7) | (byte & 0x7F)
         if byte & 0x80 == 0:
             break
     return n
@@ -342,7 +340,7 @@ class Encoder:
             self.stream.write(_BYTES_TABLE[BIN_SMALL_START + size])
         else:
             self.stream.write(_BYTES_TABLE[BIN_VAR])
-            leb128_enc(size, self.stream)
+            vlq_enc(size, self.stream)
 
         self.stream.write(b)
 
@@ -354,7 +352,7 @@ class Encoder:
             self.stream.write(_BYTES_TABLE[STR_SMALL_NUM_START + size])
         else:
             self.stream.write(_BYTES_TABLE[STR_VAR])
-            leb128_enc(size, self.stream)
+            vlq_enc(size, self.stream)
 
         self.stream.write(val)
 
@@ -364,7 +362,7 @@ class Encoder:
             self.stream.write(_BYTES_TABLE[ARR_SMALL_NUM_START + size])
         else:
             self.stream.write(_BYTES_TABLE[ARR_VAR])
-            leb128_enc(size, self.stream)
+            vlq_enc(size, self.stream)
 
         for i in items:
             self._encode(i)
@@ -375,7 +373,7 @@ class Encoder:
             self.stream.write(_BYTES_TABLE[MAP_SMALL_NUM_START + size])
         else:
             self.stream.write(_BYTES_TABLE[MAP_VAR])
-            leb128_enc(size, self.stream)
+            vlq_enc(size, self.stream)
 
         parent_stream = self.stream
         kv_pairs: list[tuple[bytes, Any]] = []
@@ -409,7 +407,7 @@ class Encoder:
             self.stream.write(_BYTES_TABLE[TAG_SMALL_START + tag.id])
         else:
             self.stream.write(_BYTES_TABLE[TAG_VAR])
-            leb128_enc(tag.id, self.stream)
+            vlq_enc(tag.id, self.stream)
 
         self._encode(rat_obj)
 
@@ -523,7 +521,7 @@ class Decoder:
 
     @register(BIN_VAR)
     def _decode_bin_var(self, _: int) -> bytes:
-        size = leb128_dec(self.stream)
+        size = vlq_dec(self.stream)
         if size < BIN_SMALL_END - BIN_SMALL_START:
             raise RatPackDecodingException("small bin encoded as bin var")
         return self.stream.read(size)
@@ -535,7 +533,7 @@ class Decoder:
 
     @register(STR_VAR)
     def _decode_str_var(self, _: int) -> str:
-        size = leb128_dec(self.stream)
+        size = vlq_dec(self.stream)
         if size < STR_SMALL_NUM_END - STR_SMALL_NUM_START:
             raise RatPackDecodingException("small str encoded as str var")
         return self.stream.read(size).decode("utf8")
@@ -543,7 +541,7 @@ class Decoder:
     @register(ARR_SMALL_NUM_START, ARR_VAR)
     def _decode_arr(self, marker: int) -> list:
         if marker == ARR_VAR:
-            size = leb128_dec(self.stream)
+            size = vlq_dec(self.stream)
             if size < ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
                 raise RatPackDecodingException("small array encoded as array var")
         else:
@@ -557,7 +555,7 @@ class Decoder:
     @register(MAP_SMALL_NUM_START, MAP_VAR)
     def _decode_map(self, marker: int) -> dict:
         if marker == MAP_VAR:
-            size = leb128_dec(self.stream)
+            size = vlq_dec(self.stream)
             if size < MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
                 raise RatPackDecodingException("small map encoded as map var")
         else:
@@ -615,7 +613,7 @@ class Decoder:
 
     @register(TAG_VAR)
     def _decode_tag_var(self, _: int) -> RatType:
-        tag_id = leb128_dec(self.stream)
+        tag_id = vlq_dec(self.stream)
 
         if tag_id < TAG_SMALL_END - TAG_SMALL_START:
             raise RatPackDecodingException("small tag encoded as tag var")
