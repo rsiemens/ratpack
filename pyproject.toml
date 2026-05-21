@@ -4,10 +4,11 @@ version = "0.1.0"
 description = "Packing away bits and bytes"
 authors = ["Ryan Siemens <ryanjsiemens@gmail.com>"]
 license = "Apache License 2.0"
-readme = "README.txt"
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
+cffi = "^2.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -16,7 +17,6 @@ msgpack = "^1.1.2"
 cbor2 = "^6.1.0"
 py-ubjson = "^0.16.1"
 mypy = "^2.1.0"
-cython = "^3.2.4"
 
 [tool.ruff.lint]
 select = ["PL", "I"]

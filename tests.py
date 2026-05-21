@@ -10,6 +10,13 @@ from datetime import datetime, timezone
 from typing import cast
 
 import ratpack as rp
+from ratpack.constants import MAGIC_NUMBER_START, MAGIC_NUMER_SIG
+from ratpack.exceptions import (
+    RatPackDecodingException,
+    RatPackEncodingException,
+    RatPackException,
+)
+from ratpack.utils import vlq_dec, vlq_enc
 
 
 def randstr() -> str:
@@ -36,10 +43,10 @@ class VLQTestCase(unittest.TestCase):
     def test_vql_enc_dec(self) -> None:
         for i in range(128):
             buff = io.BytesIO()
-            rp.vlq_enc(i, buff)
+            vlq_enc(i, buff)
 
             buff.seek(0)
-            n = rp.vlq_dec(buff)
+            n = vlq_dec(buff)
             self.assertEqual(n, i)
 
         test_cases = [
@@ -56,16 +63,16 @@ class VLQTestCase(unittest.TestCase):
         ]
         for i in test_cases:
             buff = io.BytesIO()
-            rp.vlq_enc(i, buff)
+            vlq_enc(i, buff)
 
             buff.seek(0)
-            n = rp.vlq_dec(buff)
+            n = vlq_dec(buff)
             self.assertEqual(n, i)
 
 
 class TypesTestCase(unittest.TestCase):
     def test_header(self) -> None:
-        header = bytes([rp.MAGIC_NUMBER_START]) + rp.MAGIC_NUMER_SIG
+        header = bytes([MAGIC_NUMBER_START]) + MAGIC_NUMER_SIG
         obj = [123, "abc"]
         stream = io.BytesIO()
         rp.Encoder(stream, include_header=True).encode(obj)
@@ -76,7 +83,7 @@ class TypesTestCase(unittest.TestCase):
         decoded = rp.Decoder(io.BytesIO(bites)).decode()
         self.assertEqual(decoded, obj)
 
-        with self.assertRaises(rp.RatPackDecodingException):
+        with self.assertRaises(RatPackDecodingException):
             # corrupt header signature
             bites[1] = 0x01
             rp.Decoder(io.BytesIO(bites)).decode()
@@ -96,7 +103,7 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), size + 1)
             self.assertEqual(rp.unpackb(bites), i)
 
-        with self.assertRaises(rp.RatPackEncodingException):
+        with self.assertRaises(RatPackEncodingException):
             rp.packb(2**64)
 
     def test_negint(self) -> None:
@@ -114,7 +121,7 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), size + 1)
             self.assertEqual(rp.unpackb(bites), -i)
 
-        with self.assertRaises(rp.RatPackEncodingException):
+        with self.assertRaises(RatPackEncodingException):
             rp.packb(-(2**64))
 
     def test_binary(self) -> None:
@@ -228,7 +235,7 @@ class TypesTestCase(unittest.TestCase):
             return rp.Tag(id=i, obj_type=tuple, encode=list, decode=tuple)  # type: ignore
 
         for i in range(8):
-            with self.assertRaises(rp.RatPackException):
+            with self.assertRaises(RatPackException):
                 rp.packb((1, "two"), tags=[tuple_tag(i)])
 
         for i in range(8, 16):
@@ -268,8 +275,8 @@ class BenchMarkTestCase(unittest.TestCase):
                 "file": "benchmarks/data/canada.json",
                 "size": 1055469,
                 # time of 10 iterations
-                "enc_time": 0.708890,
-                "dec_time": 0.525639,
+                "enc_time": 0.807930,
+                "dec_time": 0.649506,
             },
             {
                 "file": "benchmarks/data/citm_catalog.json",
