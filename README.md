@@ -4,7 +4,7 @@ Ratpack is a simple and efficent schemaless binary serialization format.
 
 Features:
 
-- Lexigraphically sortable
+- Lexicographically sortable
 - Deterministic ordering allowing for [content adressable storage](https://en.wikipedia.org/wiki/Content-addressable_storage).
 - Intentionally chosen small values. For example small strings can encode a length up to 36
   which covers common JSON string representations like UUIDs and ISO 8601 timestamps. This keeps
@@ -12,4 +12,4 @@ Features:
   than similar binary formats.
 - Simple extension types via tags.
 
-Checkout the [spec](https://github.com/rsiemens/ratpack/blob/main/spec/README.md) (WIP).
+Checkout the [spec](https://github.com/rsiemens/ratpack/blob/main/SPEC.md) (WIP).

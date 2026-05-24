@@ -2,14 +2,32 @@
 
 > This is a WIP - everything should be considered quite unstable at the moment!
 
+- [Overview](#overview)
+- [Data Types](#data-types)
+    - [uint](#uint-0x00-0x44)
+    - [nint](#nint-0x45-0x6B)
+    - [bin](#bin-0x6C-0x7D)
+    - [str](#str-0x7E-0xA3)
+    - [array](#array-0xA4-0xC5)
+    - [map](#map-0xC6-0xE7)
+    - [float](#float-0xE8-0xE9)
+    - [bool](#bool-0xEA-0xEB)
+    - [null](#null-0xEC)
+    - [tag](#tag-0xED-0xFE)
+    - [header](#header-0xFF)
+- [Deterministic Encoding](#deterministic-encoding)
+- [Grammar](#grammar)
+
 ## Overview
 
 Ratpack is a simple and efficent schemaless binary serialization format.
 
+A [reference implementation](https://github.com/rsiemens/ratpack/tree/main/ratpack) in python is included.
+
 ## Data Types
 
-Ratpack consits of a few of primary data types. All data types are represented by a range of values
-over a one byte, 0-255, range. The data types and there ranges are as follows:
+Ratpack consists of a few of primary data types. All data types are represented by a range of values
+over a one byte, 0-255, range. The data types and their ranges are as follows:
 
  1. uint: 0x00-0x44
     - uint-small: 0x00-0x40 (0 to 64)
@@ -30,11 +48,11 @@ over a one byte, 0-255, range. The data types and there ranges are as follows:
     - str-small: 0x7E-0xA2 (lengths 0 to 36)
     - str-var: 0xA3 (lengths >36)
  5. array: 0xA4-0xC5
-    - array-small: 0xA4-0xC4 (lengths 0 to 33)
-    - array-var: 0xC5 (lengths >33)
+    - array-small: 0xA4-0xC4 (lengths 0 to 32)
+    - array-var: 0xC5 (lengths >32)
  6. map: 0xC6-0xE7
-    - map-small: 0xC6-0xE6 (lengths 0 to 33)
-    - map-var: 0xE7 (lengths >33)
+    - map-small: 0xC6-0xE6 (lengths 0 to 32)
+    - map-var: 0xE7 (lengths >32)
  7. float: 0xE8-0xE9
     - float32: 0xE8
     - float64: 0xE9
@@ -105,10 +123,10 @@ Bytes 0x6C to 0x7C represent byte arrays with lengths 0 to 16 directly. It is th
 many bytes making up the byte array. Byte 0x7D represent a [Variable-length_quantity](https://en.wikipedia.org/wiki/Variable-length_quantity) (VLQ)
 length encoded byte array. VLQ encoding can encode arbitrary lengths by using the most
 significant bit of the following byte to signal continuation. It is the same as [LEB128](https://en.wikipedia.org/wiki/LEB128),
-but big engian instead of small. No limit on length is imposed by the specification, but
+but big endian instead of small. No limit on length is imposed by the specification, but
 implementations may wish to enforce limits as dictated by the language or for security reasons.
 
-Implementations must always choose the smallest possible reprsentation to encode the length.
+Implementations must always choose the smallest possible representation to encode the length.
 
 ### str (0x7E-0xA3)
 
@@ -137,8 +155,8 @@ array-var = ?0xC5?, ?unsigned VLQ?;
 
 The array type represents an ordered collection of data items.
 
-Bytes 0xA4 to 0xC4 represent arrays with lengths 0 to 33 directly. It is then followed by that
-many data items. Byte 0xC5 reprsents a VLQ encoded length array.
+Bytes 0xA4 to 0xC4 represent arrays with lengths 0 to 32 directly. It is then followed by that
+many data items. Byte 0xC5 represents a VLQ encoded length array.
 
 ### map (0xC6-0xE7)
 
@@ -150,13 +168,14 @@ map-var = ?0xE7?, ?unsigned VLQ?;
 
 The map type represents key-value pairs of data items.
 
-Bytes 0xC6 to 0xE6 represent maps with 0 to 33 key-value pairs directly. It is then followed by
-that many data items. Byte 0xC5 reprsents a VLQ encoded number of pairs.
+Bytes 0xC6 to 0xE6 represent maps with 0 to 32 key-value pairs directly. It is then followed by
+that many data items. Byte 0xE7 represents a VLQ encoded number of pairs.
 
 Maps keys can be hetrogeneus and there is no restriction on what may qualify as a key (maps or
-arrays could be keys of a map). Keys in a map must be sorted amongst eachother from smallest to
-largest lexigraphically, based on their encoded reprsentation. For more details see
-Deterministic Encoding.
+arrays could be keys of a map, but implementations may reject them due to language support). Keys
+in a map must be sorted amongst eachother from smallest to largest lexicographically, based on their
+encoded representation. It is invalid to have duplicate keys. For more details see Deterministic
+Encoding.
 
 ### float (0xE8-0xE9)
 
@@ -196,7 +215,7 @@ The null type is represented by 0xEC.
 
 ```
 tag = (tag-small | tag-var), item;
-tag-small = ?0xED? | ?0xEF? | ... | ?0xFD?;
+tag-small = ?0xED? | ?0xEE? | ... | ?0xFD?;
 tag-var = ?0xFE?, ?unsigned VLQ?;
 ```
 
@@ -230,7 +249,7 @@ It is marked by the byte 0xFF followed by the bytes 0x72, 0x70 and a version byt
 only valid version byte is 0x00.
 
 Outside of a data items content, the byte 0xFF is never valid except at the very start of a
-message or file.
+message or file to denote the header.
 
 ## Deterministic Encoding
 
@@ -245,9 +264,10 @@ Ratpack achieves a deterministic encoding by the following rules:
    representation if it means there would be no loss of information. A simple way to check this is
    by down casting a double precision to single precision and checking to see if any information
    is lost or not.
-2. Keys in a map must be sorted from smallest to largest by comparing the encoded keys lexigraphically.
+2. Keys in a map must be sorted from smallest to largest by comparing the encoded keys lexicographically.
+   A map must not have duplicate keys in it.
 
-These requirements come at the cost of a slight performance penelty with respect to encoding speed.
+These requirements come at the cost of a slight performance penalty with respect to encoding speed.
 It also means Ratpack can't support unknown size arrays, maps, str, or bin types.
 
 Because data types are grouped together by byte ranges it means they also have a sort order with
@@ -255,7 +275,7 @@ respect to one another, `uint < nint < bin < str < array < map < float < bool < 
 also means that within each item they are further sorted by size, `uint-small < uint8 < uint16 < uint32 < uint64`.
 The big-endian encoding used for variable sizes also ensures that sizes sort before larger, `array(1024) < array(4096)`.
 
-Specifications should validate during decoding that payloads conform to the deterministic encoding
+Implementations should validate during decoding that payloads conform to the deterministic encoding
 requirements.
 
 ## Grammar
@@ -328,7 +348,7 @@ false = ?0xEB?;
 null = ?0xEC?;
 
 tag = (tag-small | tag-var), item;
-tag-small = ?0xED? | ?0xEF? | ... | ?0xFD?;
+tag-small = ?0xED? | ?0xEE? | ... | ?0xFD?;
 tag-var = ?0xFE?, ?unsigned VLQ?;
 
 byte = ?0x00? | ?0x01? | ... | ?0xFF?;
