@@ -170,7 +170,7 @@ class Decoder:
             k = self._visit()
             item = self.stream.item.getvalue()
             # transitivity ensures all keys are lexigraphicaly orderd smallest to largest
-            if last_item is not None and item < last_item:
+            if last_item is not None and item <= last_item:
                 raise RatPackDecodingException("map keys are out of order")
             last_item = item
             self.stream = self.stream.stream

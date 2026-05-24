@@ -10,7 +10,12 @@ from datetime import datetime, timezone
 from typing import cast
 
 import ratpack as rp
-from ratpack.constants import MAGIC_NUMBER_START, MAGIC_NUMER_SIG
+from ratpack.constants import (
+    MAGIC_NUMBER_START,
+    MAGIC_NUMER_SIG,
+    MAP_SMALL_NUM_START,
+    UINT_SMALL_START,
+)
 from ratpack.exceptions import (
     RatPackDecodingException,
     RatPackEncodingException,
@@ -199,6 +204,21 @@ class TypesTestCase(unittest.TestCase):
         self.assertEqual(d1_enc, d2_enc)
         self.assertEqual(rp.unpackb(d1_enc), d1)
         self.assertEqual(rp.unpackb(d2_enc), d1)
+
+    def test_map_duplicate_keys(self) -> None:
+        # map of size 2 with duplicate keys (uint(0))
+        # literally would be {0: 1, 0: 2}
+        bites = bytes(
+            [
+                MAP_SMALL_NUM_START + 2,
+                UINT_SMALL_START,
+                UINT_SMALL_START + 1,
+                UINT_SMALL_START,
+                UINT_SMALL_START + 2,
+            ]
+        )
+        with self.assertRaises(RatPackDecodingException):
+            rp.unpackb(bites)
 
     def test_float(self) -> None:
         for i in [math.nan, math.inf, -math.inf, 0.0, 1.0, -1.0, 0.5, 2.0]:
