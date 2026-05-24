@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ratpack"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Packing away bits and bytes"
 authors = ["Ryan Siemens <ryanjsiemens@gmail.com>"]
 license = "Apache License 2.0"
@@ -8,7 +8,6 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-cffi = "^2.0.0"
 
 
 [tool.poetry.group.dev.dependencies]

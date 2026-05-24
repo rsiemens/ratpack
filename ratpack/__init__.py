@@ -6,6 +6,9 @@ from .encode import Encoder
 from .tags import Tag
 from .types import BinaryReader, BinaryWriter
 
+__version__ = "0.1.0a1"
+__all__ = ["packb", "unpackb", "pack", "unpack", "dumps", "loads", "dump", "load"]
+
 
 def packb(
     obj: Any, tags: list[Tag] | None = None, include_header: bool = False
