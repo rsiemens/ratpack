@@ -234,11 +234,11 @@ class TypesTestCase(unittest.TestCase):
         def tuple_tag(i: int) -> rp.Tag:
             return rp.Tag(id=i, obj_type=tuple, encode=list, decode=tuple)  # type: ignore
 
-        for i in range(8):
+        for i in range(9):
             with self.assertRaises(RatPackException):
                 rp.packb((1, "two"), tags=[tuple_tag(i)])
 
-        for i in range(8, 16):
+        for i in range(9, 17):
             bites = rp.packb((1, "two"), tags=[tuple_tag(i)])
             # 7 = 1 small tag byte + 1 small array + 1 small int + 1 small str byte + 3 str content
             self.assertEqual(len(bites), 7)

@@ -37,8 +37,8 @@ NULL = 0xEC
 TAG_SMALL_START = 0xED
 TAG_SMALL_END = 0xFD
 TAG_VAR = 0xFE
-# first 8 tags are reserved
-TAG_RESERVED = {i for i in range(8)}
+# first 9 tags are reserved
+TAG_RESERVED = {i for i in range(9)}
 
 # The MAGIC_NUMBER_START is only valid at the very begining of a file or ratpack stream.
 # It is not required, but if it is present, it must be immedidiately followed by the ascii encode
