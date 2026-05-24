@@ -7,10 +7,9 @@ Features:
 - Lexigraphically sortable
 - Deterministic ordering allowing for [content adressable storage](https://en.wikipedia.org/wiki/Content-addressable_storage).
 - Intentionally chosen small values. For example small strings can encode a length up to 36
-  which covers common JSON string representations like uuids and ISO 8601 timestamps. This keeps
+  which covers common JSON string representations like UUIDs and ISO 8601 timestamps. This keeps
   it competitive, and often [smaller](https://github.com/rsiemens/ratpack/blob/main/benchmarks/chart.png),
-  than similar formats.
-- Simple extension type via tags.
+  than similar binary formats.
+- Simple extension types via tags.
 
-
-Checkout the [spec](https://github.com/rsiemens/ratpack/blob/main/spec) (WIP).
+Checkout the [spec](https://github.com/rsiemens/ratpack/blob/main/spec/README.md) (WIP).
