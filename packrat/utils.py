@@ -1,6 +1,6 @@
 import struct
 
-from .exceptions import RatPackDecodingException
+from .exceptions import PackRatDecodingException
 from .types import BinaryReader, BinaryWriter
 
 u16 = struct.Struct(">H")
@@ -28,7 +28,7 @@ def vlq_dec(reader: BinaryReader) -> int:
         try:
             byte = reader.read(1)[0]
         except IndexError:
-            raise RatPackDecodingException("Malformed vlq encoded payload")
+            raise PackRatDecodingException("Malformed vlq encoded payload")
 
         n = (n << 7) | (byte & 0x7F)
         if byte & 0x80 == 0:

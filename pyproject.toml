@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "ratpack"
+name = "packrat"
 version = "0.1.0a1"
 description = "Packing away bits and bytes"
 authors = ["Ryan Siemens <ryanjsiemens@gmail.com>"]
@@ -15,7 +15,7 @@ ruff = "^0.15.12"
 msgpack = "^1.1.2"
 cbor2 = "^6.1.0"
 py-ubjson = "^0.16.1"
-mypy = "^2.1.0"
+mypy = {extras = ["mypyc"], version = "^2.3.1"}
 
 [tool.ruff.lint]
 select = ["PL", "I"]

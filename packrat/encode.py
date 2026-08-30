@@ -3,7 +3,7 @@ import math
 from typing import Any
 
 from .constants import *
-from .exceptions import RatPackEncodingException, RatPackException
+from .exceptions import PackRatEncodingException, PackRatException
 from .tags import ISODateTimeTag, Tag, UUIDTag
 from .types import BinaryWriter, RatType
 from .utils import f32, f64, u16, u32, u64, vlq_enc
@@ -30,12 +30,12 @@ class Encoder:
             tag_ids = TAG_RESERVED.copy()
             for tag in tags:
                 if tag.id in tag_ids:
-                    raise RatPackException(
+                    raise PackRatException(
                         f"Tag id {tag.id} is already in use or reserved"
                     )
                 elif tag.obj_type in self.tags:
                     existing_tag = self.tags[tag.obj_type]
-                    raise RatPackException(
+                    raise PackRatException(
                         f"Tag for {tag.obj_type} is already in use by {existing_tag}"
                     )
                 tag_ids.add(tag.id)
@@ -67,7 +67,7 @@ class Encoder:
             try:
                 tag = self.tags[type(obj)]
             except KeyError:
-                raise RatPackEncodingException(f"unable to encode {type(obj)}")
+                raise PackRatEncodingException(f"unable to encode {type(obj)}")
             self._encode_tag(tag, obj)
 
     def _encode_header(self) -> None:
@@ -90,7 +90,7 @@ class Encoder:
         elif i <= 0xFFFFFFFFFFFFFFFF:
             self.stream.write(BYTES_TABLE[UINT64] + u64.pack(i))
         else:
-            raise RatPackEncodingException(
+            raise PackRatEncodingException(
                 "unable to encode numbers larger than 2**64-1"
             )
 
@@ -107,7 +107,7 @@ class Encoder:
         elif i <= 0xFFFFFFFFFFFFFFFF:
             self.stream.write(BYTES_TABLE[NEG_INT64] + u64.pack(i))
         else:
-            raise RatPackEncodingException(
+            raise PackRatEncodingException(
                 "unable to encode numbers smaller than -(2**64-1)"
             )
 

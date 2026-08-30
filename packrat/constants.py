@@ -40,7 +40,7 @@ TAG_VAR = 0xFE
 # first 9 tags are reserved
 TAG_RESERVED = {i for i in range(9)}
 
-# The MAGIC_NUMBER_START is only valid at the very begining of a file or ratpack stream.
+# The MAGIC_NUMBER_START is only valid at the very begining of a file or packrat stream.
 # It is not required, but if it is present, it must be immedidiately followed by the ascii encode
 # characters "rp" and a version byte 0x00-0xFF.
 MAGIC_NUMBER_START = 0xFF

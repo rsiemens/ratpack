@@ -1,6 +1,6 @@
-# Ratpack
+# Packrat
 
-Ratpack is a simple and efficent schemaless binary serialization format.
+Packrat is a simple and efficent schemaless binary serialization format.
 
 Features:
 

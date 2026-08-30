@@ -20,7 +20,7 @@ json.encoder.c_make_encoder = None
 json.scanner.c_make_scanner = None
 import timeit
 
-import ratpack
+import packrat
 
 REPEAT = 10
 
@@ -71,5 +71,5 @@ if __name__ == "__main__":
         report("ubjson", data, ubjson_dumpb, ubjson_loadb)
         report("cbor2", data, cbor2.dumps, cbor2.loads)
         report("msgpack", data, msgpack_packb, msgpack_unpackb)
-        report("ratpack", data, ratpack.packb, ratpack.unpackb)
+        report("packrat", data, packrat.packb, packrat.unpackb)
         print()

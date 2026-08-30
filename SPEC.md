@@ -1,4 +1,4 @@
-# Ratpack Specification (WIP)
+# Packrat Specification (WIP)
 
 > This is a WIP - everything should be considered quite unstable at the moment!
 
@@ -20,13 +20,13 @@
 
 ## Overview
 
-Ratpack is a simple and efficent schemaless binary serialization format.
+Packrat is a simple and efficent schemaless binary serialization format.
 
-A [reference implementation](https://github.com/rsiemens/ratpack/tree/main/ratpack) in python is included.
+A [reference implementation](https://github.com/rsiemens/ratpack/tree/main/packrat) in python is included.
 
 ## Data Types
 
-Ratpack consists of a few of primary data types. All data types are represented by a range of values
+Packrat consists of a few of primary data types. All data types are represented by a range of values
 over a one byte, 0-255, range. The data types and their ranges are as follows:
 
  1. uint: 0x00-0x44
@@ -244,7 +244,7 @@ magic-signature = ?0x72?, ?0x70?, magic-version;
 magic-version = ?0x00?; (* This value should map to the specification version number, v0. *)
 ```
 
-The ratpack header is an optional magic number at the start of a ratpack encoded message or file.
+The packrat header is an optional magic number at the start of a packrat encoded message or file.
 It is marked by the byte 0xFF followed by the bytes 0x72, 0x70 and a version byte. Currently the
 only valid version byte is 0x00.
 
@@ -253,11 +253,11 @@ message or file to denote the header.
 
 ## Deterministic Encoding
 
-Ratpack is a deterministically encoded binary serialization format. This means that the same data
+Packrat is a deterministically encoded binary serialization format. This means that the same data
 is always encoded in the exact same way. This guarantee comes with several desirable properties
-such as a ratpack encoding for a set of data items always producing the same hash.
+such as a packrat encoding for a set of data items always producing the same hash.
 
-Ratpack achieves a deterministic encoding by the following rules:
+Packrat achieves a deterministic encoding by the following rules:
 
 1. A data item must always uses it's smallest possible representation. For example the integer 24 must be
    encoded by the uint-small 0x18 and not the uint8 0x41 0x18. Floats must use the single precision
@@ -268,19 +268,20 @@ Ratpack achieves a deterministic encoding by the following rules:
    A map must not have duplicate keys in it.
 
 These requirements come at the cost of a slight performance penalty with respect to encoding speed.
-It also means Ratpack can't support unknown size arrays, maps, str, or bin types.
+It also means Packrat can't support unknown size arrays, maps, str, or bin types.
 
 Because data types are grouped together by byte ranges it means they also have a sort order with
 respect to one another, `uint < nint < bin < str < array < map < float < bool < null < tag`. It
 also means that within each item they are further sorted by size, `uint-small < uint8 < uint16 < uint32 < uint64`.
-The big-endian encoding used for variable sizes also ensures that sizes sort before larger, `array(1024) < array(4096)`.
+The VLQ big-endian encoding used for variable sizes ensures that smal sizes sort before larger, `array(1024) < array(4096)`,
+since VLQ set the most significant bit in each byte as a continuation marker.
 
 Implementations should validate during decoding that payloads conform to the deterministic encoding
 requirements.
 
 ## Grammar
 
-The following is the full grammar for Ratpack, in EBNF notation.
+The following is the full grammar for Packrat, in EBNF notation.
 
 ```
 (*
@@ -290,7 +291,7 @@ The following EBNF special sequences, "?...?" are as follows:
     - ?BE IEEE 754 format? - Big endian encoded IEEE 754 floating point number, where "format" is single (32bit) or double (64bit).
 *)
 
-ratpack = [header], item;
+packrat = [header], item;
 header = magic-start, magic-signature;
 magic-start = ?0xFF?;
 magic-signature = ?0x72?, ?0x70?, magic-version;
@@ -353,6 +354,3 @@ tag-var = ?0xFE?, ?unsigned VLQ?;
 
 byte = ?0x00? | ?0x01? | ... | ?0xFF?;
 ```
-
-The name Ratpack is inspired by the [Rat Pack](https://en.wikipedia.org/wiki/Rat_Pack) group from
-the 1950s.

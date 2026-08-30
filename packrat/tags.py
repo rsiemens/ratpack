@@ -2,7 +2,7 @@ import datetime
 import uuid
 from typing import Callable, Generic, TypeVar
 
-from .exceptions import RatPackDecodingException, RatPackEncodingException
+from .exceptions import PackRatDecodingException, PackRatEncodingException
 from .types import RatType
 
 T = TypeVar("T")
@@ -23,12 +23,12 @@ class Tag(Generic[T]):
 
     def encode(self, obj: T) -> RatType:
         if self.encoder is None:
-            raise RatPackEncodingException("encode not provided for {self}")
+            raise PackRatEncodingException("encode not provided for {self}")
         return self.encoder(obj)
 
     def decode(self, item: RatType) -> T:
         if self.decoder is None:
-            raise RatPackDecodingException("decode not provided for {self}")
+            raise PackRatDecodingException("decode not provided for {self}")
         return self.decoder(item)
 
     def __repr__(self) -> str:
@@ -44,7 +44,7 @@ class ISODateTimeTag(Tag):
 
     def decode(self, item: RatType) -> datetime.datetime:
         if not isinstance(item, str):
-            raise RatPackDecodingException(
+            raise PackRatDecodingException(
                 f"expected str for datetime decoding, got {type(item)}"
             )
         return datetime.datetime.fromisoformat(item)
@@ -59,7 +59,7 @@ class UUIDTag(Tag):
 
     def decode(self, item: RatType) -> uuid.UUID:
         if not isinstance(item, bytes):
-            raise RatPackDecodingException(
+            raise PackRatDecodingException(
                 f"expected bytes for uuid decoding, got {type(item)}"
             )
         return uuid.UUID(bytes=item)

@@ -4,7 +4,7 @@ import io
 from typing import Any, Callable
 
 from .constants import *
-from .exceptions import RatPackDecodingException, RatPackException
+from .exceptions import PackRatDecodingException, PackRatException
 from .tags import ISODateTimeTag, Tag, UUIDTag
 from .types import BinaryReader, RatType
 from .utils import f32, f64, u16, u32, u64, vlq_dec
@@ -58,7 +58,7 @@ class Decoder:
         if tags is not None:
             for tag in tags:
                 if tag.id in TAG_RESERVED or tag.id in self.tags:
-                    raise RatPackException(
+                    raise PackRatException(
                         f"Tag id {tag.id} is already in use or reserved"
                     )
                 self.tags[tag.id] = tag
@@ -71,7 +71,7 @@ class Decoder:
         if marker == MAGIC_NUMBER_START:
             sig = self.stream.read(3)
             if sig != MAGIC_NUMER_SIG:
-                raise RatPackDecodingException("invalid file signature")
+                raise PackRatDecodingException("invalid file signature")
             return self._visit()
         return _DECODE_TABLE[marker](self, marker)
 
@@ -94,7 +94,7 @@ class Decoder:
         if marker == UINT64:
             return u64.unpack(self.stream.read(8))[0]
         # should be unreachable
-        raise RatPackDecodingException(f"unable to deocde fixed size int ({marker})")
+        raise PackRatDecodingException(f"unable to deocde fixed size int ({marker})")
 
     @register(NEG_INT_SMALL_START, NEG_INT_SMALL_END)
     def _decode_small_neg_int(self, marker: int) -> int:
@@ -111,7 +111,7 @@ class Decoder:
         if marker == NEG_INT64:
             return -u64.unpack(self.stream.read(8))[0]
         # should be unreachable
-        raise RatPackDecodingException(
+        raise PackRatDecodingException(
             f"unable to deocde fixed size neg int ({marker})"
         )
 
@@ -124,7 +124,7 @@ class Decoder:
     def _decode_bin_var(self, _: int) -> bytes:
         size = vlq_dec(self.stream)
         if size < BIN_SMALL_END - BIN_SMALL_START:
-            raise RatPackDecodingException("small bin encoded as bin var")
+            raise PackRatDecodingException("small bin encoded as bin var")
         return self.stream.read(size)
 
     @register(STR_SMALL_NUM_START, STR_SMALL_NUM_END)
@@ -136,7 +136,7 @@ class Decoder:
     def _decode_str_var(self, _: int) -> str:
         size = vlq_dec(self.stream)
         if size < STR_SMALL_NUM_END - STR_SMALL_NUM_START:
-            raise RatPackDecodingException("small str encoded as str var")
+            raise PackRatDecodingException("small str encoded as str var")
         return self.stream.read(size).decode("utf8")
 
     @register(ARR_SMALL_NUM_START, ARR_VAR)
@@ -144,7 +144,7 @@ class Decoder:
         if marker == ARR_VAR:
             size = vlq_dec(self.stream)
             if size < ARR_SMALL_NUM_END - ARR_SMALL_NUM_START:
-                raise RatPackDecodingException("small array encoded as array var")
+                raise PackRatDecodingException("small array encoded as array var")
         else:
             size = marker - ARR_SMALL_NUM_START
 
@@ -158,7 +158,7 @@ class Decoder:
         if marker == MAP_VAR:
             size = vlq_dec(self.stream)
             if size < MAP_SMALL_NUM_END - MAP_SMALL_NUM_START:
-                raise RatPackDecodingException("small map encoded as map var")
+                raise PackRatDecodingException("small map encoded as map var")
         else:
             size = marker - MAP_SMALL_NUM_START
 
@@ -171,7 +171,7 @@ class Decoder:
             item = self.stream.item.getvalue()
             # transitivity ensures all keys are lexigraphicaly orderd smallest to largest
             if last_item is not None and item <= last_item:
-                raise RatPackDecodingException("map keys are out of order")
+                raise PackRatDecodingException("map keys are out of order")
             last_item = item
             self.stream = self.stream.stream
 
@@ -189,7 +189,7 @@ class Decoder:
 
         can_be_f32 = f32.unpack(f32.pack(f))[0] == f
         if can_be_f32:
-            raise RatPackDecodingException("f32 representable float encoded as f64")
+            raise PackRatDecodingException("f32 representable float encoded as f64")
 
         return f
 
@@ -217,7 +217,7 @@ class Decoder:
         tag_id = vlq_dec(self.stream)
 
         if tag_id < TAG_SMALL_END - TAG_SMALL_START:
-            raise RatPackDecodingException("small tag encoded as tag var")
+            raise PackRatDecodingException("small tag encoded as tag var")
 
         tag = self.tags[tag_id]
         obj = self._visit()

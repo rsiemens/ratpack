@@ -9,19 +9,19 @@ import uuid
 from datetime import datetime, timezone
 from typing import cast
 
-import ratpack as rp
-from ratpack.constants import (
+import packrat as rp
+from packrat.constants import (
     MAGIC_NUMBER_START,
     MAGIC_NUMER_SIG,
     MAP_SMALL_NUM_START,
     UINT_SMALL_START,
 )
-from ratpack.exceptions import (
-    RatPackDecodingException,
-    RatPackEncodingException,
-    RatPackException,
+from packrat.exceptions import (
+    PackRatDecodingException,
+    PackRatEncodingException,
+    PackRatException,
 )
-from ratpack.utils import vlq_dec, vlq_enc
+from packrat.utils import vlq_dec, vlq_enc
 
 
 def randstr() -> str:
@@ -88,7 +88,7 @@ class TypesTestCase(unittest.TestCase):
         decoded = rp.Decoder(io.BytesIO(bites)).decode()
         self.assertEqual(decoded, obj)
 
-        with self.assertRaises(RatPackDecodingException):
+        with self.assertRaises(PackRatDecodingException):
             # corrupt header signature
             bites[1] = 0x01
             rp.Decoder(io.BytesIO(bites)).decode()
@@ -108,7 +108,7 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), size + 1)
             self.assertEqual(rp.unpackb(bites), i)
 
-        with self.assertRaises(RatPackEncodingException):
+        with self.assertRaises(PackRatEncodingException):
             rp.packb(2**64)
 
     def test_negint(self) -> None:
@@ -126,7 +126,7 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), size + 1)
             self.assertEqual(rp.unpackb(bites), -i)
 
-        with self.assertRaises(RatPackEncodingException):
+        with self.assertRaises(PackRatEncodingException):
             rp.packb(-(2**64))
 
     def test_binary(self) -> None:
@@ -217,7 +217,7 @@ class TypesTestCase(unittest.TestCase):
                 UINT_SMALL_START + 2,
             ]
         )
-        with self.assertRaises(RatPackDecodingException):
+        with self.assertRaises(PackRatDecodingException):
             rp.unpackb(bites)
 
     def test_float(self) -> None:
@@ -255,7 +255,7 @@ class TypesTestCase(unittest.TestCase):
             return rp.Tag(id=i, obj_type=tuple, encode=list, decode=tuple)  # type: ignore
 
         for i in range(9):
-            with self.assertRaises(RatPackException):
+            with self.assertRaises(PackRatException):
                 rp.packb((1, "two"), tags=[tuple_tag(i)])
 
         for i in range(9, 17):
