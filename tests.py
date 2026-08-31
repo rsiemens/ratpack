@@ -6,6 +6,7 @@ import string
 import timeit
 import unittest
 import uuid
+from librt.strings import BytesWriter
 from datetime import datetime, timezone
 from typing import cast
 
@@ -47,11 +48,10 @@ def randkeys(n_keys: int) -> list[str | bytes | int | float]:
 class VLQTestCase(unittest.TestCase):
     def test_vql_enc_dec(self) -> None:
         for i in range(128):
-            buff = io.BytesIO()
+            buff = BytesWriter()
             vlq_enc(i, buff)
 
-            buff.seek(0)
-            n = vlq_dec(buff)
+            n = vlq_dec(io.BytesIO(buff.getvalue()))
             self.assertEqual(n, i)
 
         test_cases = [
@@ -67,11 +67,10 @@ class VLQTestCase(unittest.TestCase):
             2**128 - 1,
         ]
         for i in test_cases:
-            buff = io.BytesIO()
+            buff = BytesWriter()
             vlq_enc(i, buff)
 
-            buff.seek(0)
-            n = vlq_dec(buff)
+            n = vlq_dec(io.BytesIO(buff.getvalue()))
             self.assertEqual(n, i)
 
 
@@ -79,10 +78,10 @@ class TypesTestCase(unittest.TestCase):
     def test_header(self) -> None:
         header = bytes([MAGIC_NUMBER_START]) + MAGIC_NUMER_SIG
         obj = [123, "abc"]
-        stream = io.BytesIO()
+        stream = BytesWriter()
         rp.Encoder(stream, include_header=True).encode(obj)
 
-        bites = stream.getbuffer()
+        bites = bytearray(stream.getvalue())
         self.assertEqual(bites[: len(header)], header)
 
         decoded = rp.Decoder(io.BytesIO(bites)).decode()
@@ -148,7 +147,7 @@ class TypesTestCase(unittest.TestCase):
             self.assertEqual(len(bites), i + 1)
             self.assertEqual(rp.unpackb(bites), s)
 
-        s = "🐀📦 is great!"
+        s = "📦🐀 is great!"
         bites = rp.packb(s)
         self.assertEqual(len(bites), len(s.encode("utf8")) + 1)
         self.assertEqual(rp.unpackb(bites), s)
@@ -295,26 +294,26 @@ class BenchMarkTestCase(unittest.TestCase):
                 "file": "benchmarks/data/canada.json",
                 "size": 1055469,
                 # time of 10 iterations
-                "enc_time": 0.807930,
-                "dec_time": 0.649506,
+                "enc_time": 0.303404,
+                "dec_time": 0.404910,
             },
             {
                 "file": "benchmarks/data/citm_catalog.json",
                 "size": 342109,
-                "enc_time": 0.276842,
-                "dec_time": 0.268711,
+                "enc_time": 0.104647,
+                "dec_time": 0.158774,
             },
             {
                 "file": "benchmarks/data/twitter.json",
                 "size": 401002,
-                "enc_time": 0.125645,
-                "dec_time": 0.123794,
+                "enc_time": 0.053942,
+                "dec_time": 0.073348,
             },
             {
                 "file": "benchmarks/data/sample.json",
                 "size": 147291,
-                "enc_time": 0.027673,
-                "dec_time": 0.028300,
+                "enc_time": 0.014367,
+                "dec_time": 0.016160,
             },
         ]
         return super().setUpClass()

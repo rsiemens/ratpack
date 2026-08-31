@@ -1,4 +1,3 @@
-from collections.abc import Buffer
 from typing import Protocol, TypeAlias, Union
 
 RatPrimitive: TypeAlias = Union[
@@ -22,4 +21,4 @@ class BinaryReader(Protocol):
 
 
 class BinaryWriter(Protocol):
-    def write(self, bites: Buffer, /) -> int: ...
+    def write(self, bites: bytes | bytearray, /) -> None: ...

@@ -1,7 +1,7 @@
 import struct
 
-from .exceptions import PackRatDecodingException
-from .types import BinaryReader, BinaryWriter
+from packrat.exceptions import PackRatDecodingException
+from packrat.types import BinaryReader, BinaryWriter
 
 u16 = struct.Struct(">H")
 u32 = struct.Struct(">I")

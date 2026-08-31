@@ -4,21 +4,13 @@ Simple benchmark against other popular schemaless serialization formats.
 Uses the pure python version (when available) for comparison.
 """
 
+import json
+import timeit
 from pathlib import Path
 
-from msgpack.fallback import Packer
-from msgpack.fallback import unpackb as msgpack_unpackb
-from ubjson.decoder import loadb as ubjson_loadb
-from ubjson.encoder import dumpb as ubjson_dumpb
-
-msgpack_packb = Packer().pack
-import json
-
 import cbor2
-
-json.encoder.c_make_encoder = None
-json.scanner.c_make_scanner = None
-import timeit
+import msgpack
+import ubjson
 
 import packrat
 
@@ -68,8 +60,8 @@ if __name__ == "__main__":
 
         print(f"{' ' * 10}{'Enc Size':<12}{'Enc Time':<12}{'Dec Time':<12}")
         report("JSON", data, json.dumps, json.loads)
-        report("ubjson", data, ubjson_dumpb, ubjson_loadb)
+        report("ubjson", data, ubjson.dumpb, ubjson.loadb)
         report("cbor2", data, cbor2.dumps, cbor2.loads)
-        report("msgpack", data, msgpack_packb, msgpack_unpackb)
+        report("msgpack", data, msgpack.packb, msgpack.unpackb)
         report("packrat", data, packrat.packb, packrat.unpackb)
         print()

@@ -2,8 +2,8 @@ import datetime
 import uuid
 from typing import Callable, Generic, TypeVar
 
-from .exceptions import PackRatDecodingException, PackRatEncodingException
-from .types import RatType
+from packrat.exceptions import PackRatDecodingException, PackRatEncodingException
+from packrat.types import RatType
 
 T = TypeVar("T")
 

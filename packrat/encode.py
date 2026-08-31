@@ -1,12 +1,50 @@
-import io
 import math
 from typing import Any
 
-from .constants import *
-from .exceptions import PackRatEncodingException, PackRatException
-from .tags import ISODateTimeTag, Tag, UUIDTag
-from .types import BinaryWriter, RatType
-from .utils import f32, f64, u16, u32, u64, vlq_enc
+from librt.strings import BytesWriter
+
+from packrat.constants import (
+    ARR_SMALL_NUM_END,
+    ARR_SMALL_NUM_START,
+    ARR_VAR,
+    BIN_SMALL_END,
+    BIN_SMALL_START,
+    BIN_VAR,
+    BYTES_TABLE,
+    FALSE,
+    FLOAT32,
+    FLOAT64,
+    MAGIC_NUMBER_START,
+    MAGIC_NUMER_SIG,
+    MAP_SMALL_NUM_END,
+    MAP_SMALL_NUM_START,
+    MAP_VAR,
+    NEG_INT8,
+    NEG_INT16,
+    NEG_INT32,
+    NEG_INT64,
+    NEG_INT_SMALL_END,
+    NEG_INT_SMALL_START,
+    NULL,
+    STR_SMALL_NUM_END,
+    STR_SMALL_NUM_START,
+    STR_VAR,
+    TAG_RESERVED,
+    TAG_SMALL_END,
+    TAG_SMALL_START,
+    TAG_VAR,
+    TRUE,
+    UINT8,
+    UINT16,
+    UINT32,
+    UINT64,
+    UINT_SMALL_END,
+    UINT_SMALL_START,
+)
+from packrat.exceptions import PackRatEncodingException, PackRatException
+from packrat.tags import ISODateTimeTag, Tag, UUIDTag
+from packrat.types import BinaryWriter
+from packrat.utils import f32, f64, u16, u32, u64, vlq_enc
 
 
 class Encoder:
@@ -15,7 +53,7 @@ class Encoder:
         stream: BinaryWriter,
         tags: list[Tag] | None = None,
         include_header: bool = False,
-    ):
+    ) -> None:
         self.stream = stream
 
         dt_tag = ISODateTimeTag()
@@ -155,7 +193,7 @@ class Encoder:
         parent_stream = self.stream
         kv_pairs: list[tuple[bytes, Any]] = []
         for k, v in d.items():
-            key_stream = io.BytesIO()
+            key_stream = BytesWriter()
             self.stream = key_stream
             self._encode(k)
             kv_pairs.append((key_stream.getvalue(), v))
@@ -175,7 +213,7 @@ class Encoder:
         else:
             self.stream.write(BYTES_TABLE[FLOAT64] + f64.pack(f))
 
-    def _encode_tag(self, tag: Tag, obj: RatType) -> None:
+    def _encode_tag(self, tag: Tag, obj: Any) -> None:
         rat_obj = tag.encode(obj)
 
         if tag.id <= TAG_SMALL_END - TAG_SMALL_START:
