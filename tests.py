@@ -6,9 +6,10 @@ import string
 import timeit
 import unittest
 import uuid
-from librt.strings import BytesWriter
 from datetime import datetime, timezone
 from typing import cast
+
+from librt.strings import BytesWriter
 
 import packrat as rp
 from packrat.constants import (
@@ -294,26 +295,26 @@ class BenchMarkTestCase(unittest.TestCase):
                 "file": "benchmarks/data/canada.json",
                 "size": 1055469,
                 # time of 10 iterations
-                "enc_time": 0.303404,
-                "dec_time": 0.404910,
+                "enc_time": 0.294200,
+                "dec_time": 0.364078,
             },
             {
                 "file": "benchmarks/data/citm_catalog.json",
                 "size": 342109,
-                "enc_time": 0.104647,
-                "dec_time": 0.158774,
+                "enc_time": 0.076794,
+                "dec_time": 0.103868,
             },
             {
                 "file": "benchmarks/data/twitter.json",
                 "size": 401002,
-                "enc_time": 0.053942,
-                "dec_time": 0.073348,
+                "enc_time": 0.037680,
+                "dec_time": 0.048129,
             },
             {
                 "file": "benchmarks/data/sample.json",
                 "size": 147291,
-                "enc_time": 0.014367,
-                "dec_time": 0.016160,
+                "enc_time": 0.01141,
+                "dec_time": 0.012389,
             },
         ]
         return super().setUpClass()
