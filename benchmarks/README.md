@@ -1,7 +1,7 @@
 # Benchmarks
 
-This contains some crude benchmarks comparing ratpack against JSON and other common serialization
-formats and their pure python implementations (if available).
+This contains some crude benchmarks comparing packrat against JSON and other common serialization
+formats.
 
 ## Size Comparison
 
@@ -13,67 +13,67 @@ Taking the best time out of 10 enc/dec iterations
 
 file: data/apache.json (101711)
           Enc Size    Enc Time    Dec Time
-   JSON   99949       0.001991    0.000400
- ubjson   91963       0.001670    0.002546
-  cbor2   84282       0.000697    0.000475
-msgpack   84082       0.003430    0.005499
-ratpack   84037       0.002842    0.002719
+   JSON   99949       0.000528    0.000491
+ ubjson   91963       0.000757    0.000486
+  cbor2   84282       0.000738    0.000485
+msgpack   84082       0.000158    0.000323
+packrat   84037       0.000871    0.000971
 
 file: data/mesh.json (752407)
           Enc Size    Enc Time    Dec Time
-   JSON   723597      0.030070    0.005061
- ubjson   435754      0.022043    0.019023
-  cbor2   414605      0.007666    0.002476
-msgpack   413633      0.030888    0.066090
-ratpack   393670      0.025022    0.019418
+   JSON   723597      0.010856    0.005040
+ ubjson   435754      0.002995    0.002742
+  cbor2   414605      0.007625    0.002461
+msgpack   413633      0.001204    0.001244
+packrat   393670      0.007284    0.009158
 
 file: data/instruments.json (122717)
           Enc Size    Enc Time    Dec Time
-   JSON   120693      0.004137    0.000851
- ubjson   97367       0.003013    0.004189
-  cbor2   85507       0.001502    0.000781
-msgpack   84565       0.005906    0.010019
-ratpack   84463       0.005341    0.005405
+   JSON   120693      0.000715    0.000851
+ ubjson   97367       0.001082    0.000789
+  cbor2   85507       0.001523    0.000794
+msgpack   84565       0.000309    0.000620
+packrat   84463       0.001534    0.001997
 
 file: data/sample.json (687491)
           Enc Size    Enc Time    Dec Time
-   JSON   275084      0.022103    0.001369
- ubjson   148687      0.001927    0.002273
-  cbor2   147095      0.000701    maximum container nesting depth (400) exceeded
-msgpack   recursion limit exceeded
-ratpack   147291      0.002306    0.002730
+   JSON   275084      0.000885    0.001404
+ ubjson   148687      0.000770    0.000751
+  cbor2   147095      0.000698    maximum container nesting depth (400) exceeded
+msgpack   147017      0.000150    0.000679
+packrat   147291      0.000823    0.001176
 
 file: data/canada.json (2251051)
           Enc Size    Enc Time    Dec Time
-   JSON   2201371     0.119699    0.024205
- ubjson   1112030     0.077560    0.059466
-  cbor2   1056200     0.027243    0.008401
-msgpack   1056793     0.084862    0.136954
-ratpack   1055469     0.068109    0.052259
+   JSON   2201371     0.044041    0.024235
+ ubjson   1112030     0.015395    0.007712
+  cbor2   1056200     0.026488    0.008243
+msgpack   1056793     0.003310    0.003964
+packrat   1055469     0.014227    0.018986
 
 file: data/github.json (55827)
           Enc Size    Enc Time    Dec Time
-   JSON   55467       0.000728    0.000192
- ubjson   51384       0.000580    0.000900
-  cbor2   48973       0.000243    0.000181
-msgpack   48969       0.001217    0.002147
-ratpack   48932       0.001074    0.001097
+   JSON   55467       0.000211    0.000185
+ ubjson   51384       0.000246    0.000183
+  cbor2   48973       0.000248    0.000182
+msgpack   48969       0.000063    0.000143
+packrat   48932       0.000384    0.000409
 
 file: data/twitter.json (631514)
           Enc Size    Enc Time    Dec Time
-   JSON   588098      0.008456    0.002194
- ubjson   426156      0.006253    0.009680
-  cbor2   402814      0.002643    0.002113
-msgpack   401510      0.012539    0.023076
-ratpack   401002      0.011987    0.012381
+   JSON   588098      0.001789    0.002193
+ ubjson   426156      0.002554    0.002143
+  cbor2   402814      0.002627    0.002127
+msgpack   401510      0.000605    0.001705
+packrat   401002      0.003789    0.004818
 
 file: data/citm_catalog.json (1727204)
           Enc Size    Enc Time    Dec Time
-   JSON   551950      0.028027    0.004089
- ubjson   391463      0.024288    0.026466
-  cbor2   342373      0.011606    0.004460
-msgpack   342473      0.035739    0.052798
-ratpack   342109      0.027322    0.026493
+   JSON   551950      0.003492    0.004010
+ ubjson   391463      0.008111    0.004087
+  cbor2   342373      0.011380    0.004488
+msgpack   342473      0.001598    0.003074
+packrat   342109      0.007609    0.010247
 ```
 
 ## JSON inputs used
