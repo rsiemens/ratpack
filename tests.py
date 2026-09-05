@@ -295,8 +295,8 @@ class BenchMarkTestCase(unittest.TestCase):
                 "file": "benchmarks/data/canada.json",
                 "size": 1055469,
                 # time of 10 iterations
-                "enc_time": 0.294200,
-                "dec_time": 0.364078,
+                "enc_time": 0.141884,
+                "dec_time": 0.194902,
             },
             {
                 "file": "benchmarks/data/citm_catalog.json",

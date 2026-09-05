@@ -44,7 +44,7 @@ from packrat.constants import (
 from packrat.exceptions import PackRatDecodingException, PackRatException
 from packrat.tags import ISODateTimeTag, Tag, UUIDTag
 from packrat.types import BinaryReader
-from packrat.utils import f32, f64, u16, u32, u64, vlq_dec
+from packrat.utils import pack_f32, u16, u32, u64, unpack_f32, unpack_f64, vlq_dec
 
 
 class ItemWrappedStream:
@@ -113,7 +113,7 @@ class Decoder:
         if MAP_SMALL_NUM_START <= marker <= MAP_VAR:
             return self._decode_map(marker)
         if marker == FLOAT32:
-            return f32.unpack(self.stream.read(4))[0]
+            return unpack_f32(self.stream.read(4))
         if marker == FLOAT64:
             return self._decode_f64(marker)
         if marker == TRUE:
@@ -206,9 +206,9 @@ class Decoder:
         return ctx
 
     def _decode_f64(self, _: int) -> float:
-        f = f64.unpack(self.stream.read(8))[0]
+        f = unpack_f64(self.stream.read(8))
 
-        can_be_f32 = f32.unpack(f32.pack(f))[0] == f
+        can_be_f32 = unpack_f32(pack_f32(f)) == f
         if can_be_f32:
             raise PackRatDecodingException("f32 representable float encoded as f64")
 

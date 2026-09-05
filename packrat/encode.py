@@ -44,7 +44,7 @@ from packrat.constants import (
 from packrat.exceptions import PackRatEncodingException, PackRatException
 from packrat.tags import ISODateTimeTag, Tag, UUIDTag
 from packrat.types import BinaryWriter
-from packrat.utils import f32, f64, u16, u32, u64, vlq_enc
+from packrat.utils import pack_f32, pack_f64, u16, u32, u64, unpack_f32, vlq_enc
 
 
 class Encoder:
@@ -206,12 +206,12 @@ class Encoder:
             self._encode(v)
 
     def _encode_float(self, f: float) -> None:
-        f32packed = f32.pack(f)
+        f32packed = pack_f32(f)
 
-        if f32.unpack(f32packed)[0] == f or math.isnan(f):
+        if unpack_f32(f32packed) == f or math.isnan(f):
             self.stream.write(BYTES_TABLE[FLOAT32] + f32packed)
         else:
-            self.stream.write(BYTES_TABLE[FLOAT64] + f64.pack(f))
+            self.stream.write(BYTES_TABLE[FLOAT64] + pack_f64(f))
 
     def _encode_tag(self, tag: Tag, obj: Any) -> None:
         rat_obj = tag.encode(obj)

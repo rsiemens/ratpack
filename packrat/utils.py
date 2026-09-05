@@ -1,13 +1,39 @@
 import struct
 
+from librt.strings import (
+    BytesWriter,
+    read_f32_be,
+    read_f64_be,
+    write_f32_be,
+    write_f64_be,
+)
+
 from packrat.exceptions import PackRatDecodingException
 from packrat.types import BinaryReader, BinaryWriter
 
 u16 = struct.Struct(">H")
 u32 = struct.Struct(">I")
 u64 = struct.Struct(">Q")
-f32 = struct.Struct(">f")
-f64 = struct.Struct(">d")
+
+
+def pack_f32(f: float) -> bytes:
+    buff = BytesWriter()
+    write_f32_be(buff, f)
+    return buff.getvalue()
+
+
+def unpack_f32(b: bytes) -> float:
+    return read_f32_be(b, 0)
+
+
+def pack_f64(f: float) -> bytes:
+    buff = BytesWriter()
+    write_f64_be(buff, f)
+    return buff.getvalue()
+
+
+def unpack_f64(b: bytes) -> float:
+    return read_f64_be(b, 0)
 
 
 def vlq_enc(n: int, writer: BinaryWriter) -> None:
